@@ -17,7 +17,7 @@ import {
 
 const tools = [
   {
-    title: "常用工具",
+    title: "Lab Toolbox",
     description:
       "分子量计算、摩尔浓度、稀释计算、动物体内配方、同源重组连接等实验室常用计算器。",
     icon: Wrench,
