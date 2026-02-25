@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   FlaskConical,
-  Calculator,
+  Wrench,
   TestTubes,
   Dna,
   BookOpen,
@@ -17,17 +17,17 @@ import {
 
 const tools = [
   {
-    title: "Molecular Weight Calculator",
+    title: "常用工具",
     description:
-      "Calculate molecular weight from chemical formulas. Supports common lipids and polymers used in nano drug delivery.",
-    icon: Calculator,
-    href: "/tools/mol-weight",
+      "分子量计算、摩尔浓度、稀释计算、动物体内配方、同源重组连接等实验室常用计算器。",
+    icon: Wrench,
+    href: "/tools",
     badge: "Free",
   },
   {
     title: "LNP Formulation Calculator",
     description:
-      "Calculate lipid nanoparticle formulations with N/P ratio, lipid molar ratios, and volume parameters.",
+      "基于 N/P 比和脂质摩尔比计算 LNP 各组分用量，支持自定义配方参数。",
     icon: TestTubes,
     href: "/tools/lnp-formula",
     badge: "Free",
@@ -35,15 +35,15 @@ const tools = [
   {
     title: "Plasmid Manager",
     description:
-      "Store, organize and visualize your plasmid sequences. Supports FASTA and GenBank formats.",
+      "保存和管理质粒序列，支持搜索、编辑和序列可视化查看。",
     icon: Dna,
     href: "/plasmid",
     badge: "Login Required",
   },
   {
-    title: "Research Notes",
+    title: "Research",
     description:
-      "Learn about nano drug delivery systems, lipid nanoparticles, mRNA therapeutics, and more.",
+      "LNP递送系统驱动下的mRNA疗法演进——从药物对比到核心设计、临床应用和前沿挑战。",
     icon: BookOpen,
     href: "/research",
     badge: "Free",
@@ -76,7 +76,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/tools/mol-weight">
+            <Link href="/tools">
               <Button size="lg" className="gap-2">
                 Get Started <ArrowRight className="h-4 w-4" />
               </Button>

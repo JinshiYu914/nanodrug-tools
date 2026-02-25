@@ -9,7 +9,7 @@ import { UserNav } from "./user-nav";
 
 const navLinks = [
   { href: "/research", label: "Research" },
-  { href: "/tools/mol-weight", label: "Mol Weight" },
+  { href: "/tools", label: "常用工具" },
   { href: "/tools/lnp-formula", label: "LNP Formula" },
   { href: "/plasmid", label: "Plasmid" },
 ];

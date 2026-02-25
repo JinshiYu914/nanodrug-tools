@@ -18,6 +18,7 @@ import {
   type LnpInput,
   type LnpResult,
 } from "@/lib/calculations/lnp-formula";
+import Link from "next/link";
 
 export default function LnpFormulaPage() {
   const [input, setInput] = useState<LnpInput>(DEFAULT_LNP_INPUT);
@@ -52,6 +53,7 @@ export default function LnpFormulaPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
+      <div className="mb-2"><Link href="/tools" className="text-sm text-muted-foreground hover:text-primary">← 返回常用工具</Link></div>
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
