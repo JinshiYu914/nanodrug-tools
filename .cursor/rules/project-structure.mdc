@@ -1,0 +1,46 @@
+---
+description: Project architecture and conventions for NanoDrug Tools website
+globs:
+  - "**/*.ts"
+  - "**/*.tsx"
+alwaysApply: true
+---
+
+# NanoDrug Tools - Project Conventions
+
+## Tech Stack
+- Next.js 14+ (App Router) + TypeScript
+- UI: shadcn/ui (Tailwind CSS v4)
+- Backend: Supabase (Auth + PostgreSQL + Storage)
+- Deployment: Vercel (frontend) + Supabase (backend services)
+- Package manager: pnpm
+
+## Directory Structure
+- `src/app/` — Next.js App Router pages (route groups for organization)
+- `src/components/ui/` — shadcn/ui components (DO NOT modify directly)
+- `src/components/layout/` — Layout components (Navbar, Footer, etc.)
+- `src/components/tools/` — Tool-specific components (each tool in its own file)
+- `src/lib/supabase/` — Supabase client configuration (client.ts, server.ts, middleware.ts)
+- `src/lib/calculations/` — Pure calculation logic (molecular weight, LNP formulas, etc.)
+- `src/lib/utils.ts` — General utility functions
+- `src/types/` — TypeScript type definitions
+
+## Coding Conventions
+- All components use TypeScript with strict types
+- Separate calculation logic from UI components (put in `src/lib/calculations/`)
+- Each online tool is an independent route under `src/app/tools/`
+- Use Supabase server client (`src/lib/supabase/server.ts`) in Server Components
+- Use Supabase browser client (`src/lib/supabase/client.ts`) in Client Components
+- Protected routes (requiring auth): `/plasmid/*`, `/dashboard/*`
+- Public routes: `/`, `/research/*`, `/tools/mol-weight`, `/tools/lnp-formula`
+
+## Database (Supabase PostgreSQL)
+- `profiles` — User profiles (extends auth.users)
+- `plasmids` — Plasmid sequences (user-owned data with RLS)
+- Always use Row Level Security (RLS) policies
+
+## Styling
+- Use Tailwind CSS utility classes
+- Use shadcn/ui components as building blocks
+- Support dark/light mode via `next-themes`
+- Responsive design: mobile-first approach
