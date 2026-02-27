@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { UserPlus, Eye, EyeOff } from "lucide-react";
+import { KeyRound, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,19 +16,17 @@ import {
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 
-export default function RegisterPage() {
+export default function ResetPasswordPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleReset(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -47,23 +44,14 @@ export default function RegisterPage() {
     }
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: displayName,
-        },
-      },
-    });
+    const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       setError(error.message);
-      setLoading(false);
     } else {
       setSuccess(true);
-      setLoading(false);
     }
+    setLoading(false);
   }
 
   if (success) {
@@ -71,16 +59,16 @@ export default function RegisterPage() {
       <div className="flex min-h-[80vh] items-center justify-center px-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>请查看你的邮箱</CardTitle>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <CardTitle>密码已重置</CardTitle>
             <CardDescription>
-              我们已向 <strong>{email}</strong>{" "}
-              发送了确认链接。请查看收件箱并点击链接激活你的账户。
+              你的密码已成功更新。现在可以使用新密码登录了。
             </CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
-            <Link href="/login">
-              <Button variant="outline">返回登录</Button>
-            </Link>
+            <Button onClick={() => router.push("/login")}>前往登录</Button>
           </CardFooter>
         </Card>
       </div>
@@ -92,14 +80,12 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <UserPlus className="h-6 w-6 text-primary" />
+            <KeyRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">创建账户</CardTitle>
-          <CardDescription>
-            注册以保存数据并使用全部工具
-          </CardDescription>
+          <CardTitle className="text-2xl">重设密码</CardTitle>
+          <CardDescription>请输入你的新密码</CardDescription>
         </CardHeader>
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleReset}>
           <CardContent className="space-y-4">
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -107,28 +93,7 @@ export default function RegisterPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="name">显示名称</Label>
-              <Input
-                id="name"
-                placeholder="你的名称"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">邮箱</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">新密码</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -155,12 +120,12 @@ export default function RegisterPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">确认密码</Label>
+              <Label htmlFor="confirmPassword">确认新密码</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  placeholder="再次输入密码"
+                  placeholder="再次输入新密码"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
@@ -185,19 +150,17 @@ export default function RegisterPage() {
               )}
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-3">
+          <CardFooter>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "注册中..." : "创建账户"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  更新中...
+                </>
+              ) : (
+                "重设密码"
+              )}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              已有账户？{" "}
-              <Link
-                href="/login"
-                className="font-medium text-primary hover:underline"
-              >
-                登录
-              </Link>
-            </p>
           </CardFooter>
         </form>
       </Card>

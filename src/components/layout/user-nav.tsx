@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Settings, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,7 +43,7 @@ export function UserNav() {
     return (
       <Link href="/login" className="hidden md:block">
         <Button variant="outline" size="sm">
-          Login
+          登录
         </Button>
       </Link>
     );
@@ -79,9 +79,22 @@ export function UserNav() {
           <p className="text-sm font-medium truncate">{displayName}</p>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/profile">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>个人信息</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/contact">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            <span>联系我们</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>退出登录</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

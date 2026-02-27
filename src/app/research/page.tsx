@@ -172,7 +172,7 @@ export default function ResearchPage() {
                 <span className="text-2xl text-muted-foreground">→</span>
                 <Shield className="h-12 w-12 text-blue-500" />
               </div>
-              <h3 className="text-xl font-bold">2020: 爆发点</h3>
+              <h3 className="text-xl font-bold">LNP-RNA药物</h3>
               <p className="text-sm text-muted-foreground">COVID-19 疫苗验证了平台的快速响应能力</p>
               <div className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
                 <span>极短开发周期</span>

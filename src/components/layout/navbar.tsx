@@ -10,7 +10,7 @@ import { UserNav } from "./user-nav";
 const navLinks = [
   { href: "/research", label: "Research" },
   { href: "/tools", label: "Lab Toolbox" },
-  { href: "/tools/lnp-formula", label: "LNP Formula" },
+  { href: "/tools/lnp-formula", label: "LNP Calculator" },
   { href: "/plasmid", label: "Plasmid" },
 ];
 
@@ -64,9 +64,14 @@ export function Navbar() {
                 </Button>
               </Link>
             ))}
+            <Link href="/contact" onClick={() => setMobileOpen(false)}>
+              <Button variant="ghost" className="w-full justify-start">
+                联系我们
+              </Button>
+            </Link>
             <Link href="/login" onClick={() => setMobileOpen(false)}>
               <Button variant="outline" className="mt-2 w-full">
-                Login
+                登录
               </Button>
             </Link>
           </nav>

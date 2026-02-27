@@ -16,8 +16,8 @@ export function Footer() {
           <Link href="/tools/mol-weight" className="transition-colors hover:text-foreground">
             Tools
           </Link>
-          <Link href="/about" className="transition-colors hover:text-foreground">
-            About
+          <Link href="/contact" className="transition-colors hover:text-foreground">
+            联系我们
           </Link>
         </nav>
       </div>
