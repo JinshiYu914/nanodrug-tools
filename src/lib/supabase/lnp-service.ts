@@ -1,9 +1,11 @@
 import { createClient } from "./client";
 
+export type LnpItemType = "formula" | "preparation" | "screening_session";
+
 export interface LnpSavedItem {
   id: string;
   user_id: string;
-  type: "formula" | "preparation";
+  type: LnpItemType;
   is_folder: boolean;
   parent_id: string | null;
   name: string;
@@ -18,7 +20,7 @@ export interface TreeNode extends LnpSavedItem {
 }
 
 export async function listAllItems(
-  type: "formula" | "preparation"
+  type: LnpItemType
 ): Promise<LnpSavedItem[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -63,6 +65,18 @@ export async function renameItem(id: string, name: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateItemData(
+  id: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("lnp_saved_items")
+    .update({ data, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteItem(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase
@@ -70,6 +84,36 @@ export async function deleteItem(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+export async function deleteItems(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("lnp_saved_items")
+    .delete()
+    .in("id", ids);
+  if (error) throw error;
+}
+
+export async function duplicateItem(id: string): Promise<LnpSavedItem> {
+  const supabase = createClient();
+  const { data: src, error: readErr } = await supabase
+    .from("lnp_saved_items")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (readErr) throw readErr;
+  const s = src as LnpSavedItem;
+
+  return await createItem({
+    type: s.type,
+    is_folder: s.is_folder,
+    parent_id: s.parent_id,
+    name: `${s.name} (副本)`,
+    data: s.data,
+    sort_order: s.sort_order + 1,
+  });
 }
 
 export async function moveItem(
