@@ -38,6 +38,7 @@ import {
   updateItemData,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
+import { exportBenchToXlsx } from "@/lib/export/lnp-bench-xlsx";
 
 export default function ScreeningMode() {
   const [activeSession, setActiveSession] = useState<LnpSavedItem | null>(
@@ -54,6 +55,7 @@ export default function ScreeningMode() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Persist sessionData to Supabase whenever it mutates (after initial load).
   const sessionIdRef = useRef<string | null>(null);
@@ -192,6 +194,42 @@ export default function ScreeningMode() {
     // If the formulation currently being edited was removed, clear edit state.
     if (editingId && !next.some((f) => f.id === editingId)) {
       resetWorkspace();
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!activeSession || sessionData.formulations.length === 0) return;
+    setExporting(true);
+    try {
+      const mod = await import("@/lib/export/lnp-bench-pdf");
+      await mod.exportBenchToPdf(
+        activeSession.name,
+        activeSession.created_at,
+        activeSession.updated_at,
+        sessionData.formulations
+      );
+      toast.success("PDF 已生成");
+    } catch (e) {
+      console.error(e);
+      toast.error("导出 PDF 失败");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function handleExportXlsx() {
+    if (!activeSession || sessionData.formulations.length === 0) return;
+    try {
+      exportBenchToXlsx(
+        activeSession.name,
+        activeSession.created_at,
+        activeSession.updated_at,
+        sessionData.formulations
+      );
+      toast.success("Excel 已生成");
+    } catch (e) {
+      console.error(e);
+      toast.error("导出 Excel 失败");
     }
   }
 
@@ -401,6 +439,9 @@ export default function ScreeningMode() {
                   onChange={handleBenchChange}
                   activeEditingId={editingId}
                   onLoad={loadFormulationToWorkspace}
+                  onExportPdf={handleExportPdf}
+                  onExportXlsx={handleExportXlsx}
+                  busy={exporting}
                 />
               </CardContent>
             </Card>
