@@ -25,6 +25,7 @@ import FormulationWorkspace, {
   createDefaultWorkspaceValue,
   type WorkspaceValue,
 } from "@/components/tools/lnp/formulation-workspace";
+import ScreeningMode from "@/components/tools/lnp/screening-mode";
 import {
   computeBenchFormulation,
   type BenchPrepParams,
@@ -304,11 +305,7 @@ export default function LnpFormulaPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                配方筛选实验台即将上线...
-              </CardContent>
-            </Card>
+            <ScreeningMode />
           )}
         </TabsContent>
       </Tabs>
