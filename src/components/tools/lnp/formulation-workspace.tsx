@@ -497,25 +497,6 @@ export default function FormulationWorkspace({
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    Nucleic Acid Type
-                  </Label>
-                  <select
-                    value={value.prep.naType}
-                    onChange={(e) =>
-                      setPrep({
-                        naType: e.target.value as "mRNA" | "siRNA" | "pDNA",
-                      })
-                    }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="mRNA">mRNA</option>
-                    <option value="siRNA">siRNA</option>
-                    <option value="pDNA">pDNA</option>
-                  </select>
-                </div>
-
                 {isIonizableCustom && ionizableEntry && (
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">

@@ -36,42 +36,42 @@ function ensureFonts() {
 const styles = StyleSheet.create({
   page: {
     fontFamily: "NotoSansSC",
-    fontSize: 9,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 22,
-    lineHeight: 1.35,
+    fontSize: 8,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+    lineHeight: 1.25,
     color: "#222",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    marginBottom: 6,
-    paddingBottom: 4,
+    marginBottom: 4,
+    paddingBottom: 3,
     borderBottom: "1pt solid #222",
   },
   title: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 700,
   },
   meta: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#555",
     textAlign: "right",
   },
   sessionBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 6,
-    marginBottom: 8,
-    fontSize: 9,
+    marginTop: 3,
+    marginBottom: 5,
+    fontSize: 8,
     color: "#555",
   },
   card: {
-    marginBottom: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    marginBottom: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
     border: "0.5pt solid #ccc",
     borderRadius: 3,
   },
@@ -79,64 +79,61 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   cardIndex: {
-    width: 20,
+    width: 18,
     fontWeight: 700,
-    fontSize: 10,
+    fontSize: 9,
   },
   cardName: {
     fontWeight: 700,
-    fontSize: 11,
+    fontSize: 10,
     flex: 1,
   },
   cardDate: {
-    fontSize: 8,
+    fontSize: 7,
     color: "#888",
   },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 2,
+    paddingTop: 2,
+    borderTop: "0.5pt solid #eee",
+  },
   sectionLabel: {
+    width: 40,
     fontSize: 8,
     fontWeight: 700,
     color: "#555",
-    marginBottom: 2,
+    paddingTop: 1,
   },
-  compositionRow: {
+  sectionBody: {
+    flex: 1,
     flexDirection: "row",
     flexWrap: "wrap",
-    borderTop: "0.5pt solid #eee",
-    paddingTop: 3,
-    marginTop: 2,
   },
   lipidCell: {
     width: "25%",
     paddingRight: 6,
-    paddingBottom: 2,
   },
   lipidName: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 700,
   },
   lipidDetail: {
-    fontSize: 8,
+    fontSize: 7,
     color: "#555",
   },
   lipidVolume: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 700,
     color: "#1a6b4a",
   },
-  paramsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 3,
-    paddingTop: 3,
-    borderTop: "0.5pt dashed #ddd",
-    fontSize: 9,
-  },
   paramCell: {
-    marginRight: 14,
-    marginBottom: 2,
+    marginRight: 12,
+    fontSize: 8,
   },
   paramLabel: {
     color: "#888",
@@ -144,33 +141,22 @@ const styles = StyleSheet.create({
   paramValue: {
     fontWeight: 700,
   },
-  volumesRow: {
-    flexDirection: "row",
-    marginTop: 3,
-    paddingTop: 3,
-    borderTop: "0.5pt dashed #ddd",
-  },
-  volumeCol: {
-    flex: 1,
+  volumeCell: {
+    marginRight: 12,
+    fontSize: 8,
   },
   volumeTitle: {
-    fontSize: 8,
     color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  volumeLine: {
-    fontSize: 9,
+    fontWeight: 700,
   },
   footer: {
     position: "absolute",
-    bottom: 10,
-    left: 18,
-    right: 18,
+    bottom: 8,
+    left: 16,
+    right: 16,
     flexDirection: "row",
     justifyContent: "space-between",
-    fontSize: 8,
+    fontSize: 7,
     color: "#999",
   },
 });
@@ -215,7 +201,7 @@ export function BenchDocument({
             key={f.id}
             index={i + 1}
             formulation={f}
-            breakPage={i > 0 && i % 3 === 0}
+            breakPage={i > 0 && i % 4 === 0}
           />
         ))}
 
@@ -256,109 +242,108 @@ function FormulationCard({
         </Text>
       </View>
 
-      {/* Row 1 — composition */}
-      <Text style={styles.sectionLabel}>配方</Text>
-      <View style={styles.compositionRow}>
-        {formulation.lipidEntries.map((e) => {
-          const name = e.isCustomLipid ? e.customLipidName : e.lipidName;
-          const vol = stockVolumes?.[e.id];
-          return (
-            <View key={e.id} style={styles.lipidCell}>
-              <Text style={styles.lipidName}>{name || "?"}</Text>
-              <Text style={styles.lipidDetail}>
-                {e.molarRatio || "0"}% · MW {e.molarWeight || "?"} · Stock{" "}
-                {e.stockConc || "?"} mg/mL
-              </Text>
-              <Text style={styles.lipidVolume}>
-                吸取 {vol ? formatVolume(vol.uL) : "--"}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {/* Params */}
-      <Text style={[styles.sectionLabel, { marginTop: 4 }]}>制备参数</Text>
-      <View style={styles.paramsRow}>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>N/P</Text>
-          <Text style={styles.paramValue}>{formulation.prep.npRatio || "-"}</Text>
-        </View>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>脂相浓度</Text>
-          <Text style={styles.paramValue}>
-            {formulation.prep.masterConc || "-"} mM
-          </Text>
-        </View>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>FRR</Text>
-          <Text style={styles.paramValue}>
-            {formulation.prep.frrAqueous}:{formulation.prep.frrOrganic}
-          </Text>
-        </View>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>RNA</Text>
-          <Text style={styles.paramValue}>
-            {formulation.prep.rnaMass || "-"} µg · {formulation.prep.naType}
-          </Text>
-        </View>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>RNA 浓度</Text>
-          <Text style={styles.paramValue}>
-            {formulation.prep.rnaConc || "-"} µg/µL
-          </Text>
-        </View>
-        <View style={styles.paramCell}>
-          <Text style={styles.paramLabel}>Lipid Mix 总浓度</Text>
-          <Text style={styles.paramValue}>
-            {totalConc ? `${totalConc.mM.toFixed(2)} mM` : "--"}
-          </Text>
+      {/* 配方 */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>配方</Text>
+        <View style={styles.sectionBody}>
+          {formulation.lipidEntries.map((e) => {
+            const name = e.isCustomLipid ? e.customLipidName : e.lipidName;
+            const vol = stockVolumes?.[e.id];
+            return (
+              <View key={e.id} style={styles.lipidCell}>
+                <Text style={styles.lipidName}>{name || "?"}</Text>
+                <Text style={styles.lipidDetail}>
+                  {e.molarRatio || "0"}% · MW {e.molarWeight || "?"} · Stock{" "}
+                  {e.stockConc || "?"} mg/mL
+                </Text>
+                <Text style={styles.lipidVolume}>
+                  吸取 {vol ? formatVolume(vol.uL) : "--"}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </View>
 
-      {/* Row 2 — volumes */}
-      <View style={styles.volumesRow}>
-        <View style={styles.volumeCol}>
-          <Text style={styles.volumeTitle}>脂相 Organic</Text>
-          <Text style={styles.volumeLine}>
+      {/* 制备参数 */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>制备参数</Text>
+        <View style={styles.sectionBody}>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>N/P </Text>
+            <Text style={styles.paramValue}>
+              {formulation.prep.npRatio || "-"}
+            </Text>
+          </Text>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>脂相浓度 </Text>
+            <Text style={styles.paramValue}>
+              {formulation.prep.masterConc || "-"} mM
+            </Text>
+          </Text>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>FRR </Text>
+            <Text style={styles.paramValue}>
+              {formulation.prep.frrAqueous}:{formulation.prep.frrOrganic}
+            </Text>
+          </Text>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>RNA </Text>
+            <Text style={styles.paramValue}>
+              {formulation.prep.rnaMass || "-"} µg · {formulation.prep.naType}
+            </Text>
+          </Text>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>RNA 浓度 </Text>
+            <Text style={styles.paramValue}>
+              {formulation.prep.rnaConc || "-"} µg/µL
+            </Text>
+          </Text>
+          <Text style={styles.paramCell}>
+            <Text style={styles.paramLabel}>Lipid Mix 总浓度 </Text>
+            <Text style={styles.paramValue}>
+              {totalConc ? `${totalConc.mM.toFixed(2)} mM` : "--"}
+            </Text>
+          </Text>
+        </View>
+      </View>
+
+      {/* 体积 */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>体积</Text>
+        <View style={styles.sectionBody}>
+          <Text style={styles.volumeCell}>
+            <Text style={styles.volumeTitle}>脂相 </Text>
             Lipid mix{" "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.lipidMix_uL)}
             </Text>
-            {" · EtOH "}
+            {" + EtOH "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.ethanol_uL)}
             </Text>
-          </Text>
-          <Text style={styles.volumeLine}>
-            Total{" "}
+            {" = "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.organicTotal_uL)}
             </Text>
           </Text>
-        </View>
-        <View style={styles.volumeCol}>
-          <Text style={styles.volumeTitle}>水相 Aqueous</Text>
-          <Text style={styles.volumeLine}>
+          <Text style={styles.volumeCell}>
+            <Text style={styles.volumeTitle}>水相 </Text>
             RNA{" "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.rnaVolume_uL)}
             </Text>
-            {" · Citrate buffer "}
+            {" + CB "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.cbBuffer_uL)}
             </Text>
-          </Text>
-          <Text style={styles.volumeLine}>
-            Total{" "}
+            {" = "}
             <Text style={{ fontWeight: 700 }}>
               {formatVolume(prepVolumes.aqueousTotal_uL)}
             </Text>
           </Text>
-        </View>
-        <View style={styles.volumeCol}>
-          <Text style={styles.volumeTitle}>两相总体积</Text>
-          <Text style={styles.volumeLine}>
+          <Text style={styles.volumeCell}>
+            <Text style={styles.volumeTitle}>两相总体积 </Text>
             {prepVolumes.aqueousTotal_uL !== null &&
             prepVolumes.organicTotal_uL !== null ? (
               <Text style={{ fontWeight: 700 }}>
