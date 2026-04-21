@@ -34,6 +34,47 @@ import {
   type BenchSessionData,
 } from "@/lib/calculations/lnp-bench";
 import type { LipidEntry } from "@/lib/calculations/lnp-formula";
+
+const num = (s: string) => {
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
+
+function validateForBench(
+  workspace: WorkspaceValue,
+  name: string
+): string | null {
+  if (!name.trim()) return "请先填写配方名称";
+
+  const sum = workspace.lipidEntries.reduce(
+    (s, e) => s + num(e.molarRatio),
+    0
+  );
+  if (Math.abs(sum - 100) > 0.1) {
+    return `摩尔比总和必须为 100%（当前 ${sum.toFixed(1)}%）`;
+  }
+
+  for (const e of workspace.lipidEntries) {
+    const n = e.isCustomLipid ? e.customLipidName : e.lipidName;
+    if (!n?.trim()) return `请填写「${e.label}」的脂质名称`;
+    if (!(num(e.molarWeight) > 0))
+      return `请填写「${e.label}」的分子量`;
+    if (!(num(e.molarRatio) > 0))
+      return `请填写「${e.label}」的摩尔比`;
+    if (!(num(e.stockConc) > 0))
+      return `请填写「${e.label}」的母液浓度`;
+  }
+
+  const p = workspace.prep;
+  if (!(num(p.masterConc) > 0)) return "请填写 Lipid Master Mix Conc";
+  if (!(num(p.frrAqueous) > 0) || !(num(p.frrOrganic) > 0))
+    return "请填写 FRR";
+  if (!(num(p.npRatio) > 0)) return "请填写 N/P Ratio";
+  if (!(num(p.rnaMass) > 0)) return "请填写 RNA 质量 (RNA mass)";
+  if (!(num(p.rnaConc) > 0)) return "请填写 RNA 浓度 (RNA conc)";
+
+  return null;
+}
 import {
   updateItemData,
   type LnpSavedItem,
@@ -51,7 +92,6 @@ export default function ScreeningMode() {
     createDefaultWorkspaceValue
   );
   const [formulationName, setFormulationName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -102,7 +142,6 @@ export default function ScreeningMode() {
     setSessionData(parseBenchSession(item.data));
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
-    setEditingId(null);
     setLastSavedAt(null);
   }, []);
 
@@ -114,7 +153,6 @@ export default function ScreeningMode() {
         setSessionData(emptyBenchSession());
         setWorkspace(createDefaultWorkspaceValue());
         setFormulationName("");
-        setEditingId(null);
       }
     },
     [activeSession]
@@ -123,7 +161,6 @@ export default function ScreeningMode() {
   function resetWorkspace() {
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
-    setEditingId(null);
   }
 
   function snapshotFormulation(id: string): BenchFormulation {
@@ -141,8 +178,9 @@ export default function ScreeningMode() {
       toast.error("请先选择或新建一个筛选会话");
       return;
     }
-    if (!formulationName.trim()) {
-      toast.error("请先填写配方名称");
+    const err = validateForBench(workspace, formulationName);
+    if (err) {
+      toast.error(err);
       return;
     }
     const snap = snapshotFormulation(generateFormulationId());
@@ -151,27 +189,7 @@ export default function ScreeningMode() {
       formulations: [...prev.formulations, snap],
     }));
     toast.success(`已加入「${snap.name}」`);
-    resetWorkspace();
-  }
-
-  function updateInBench() {
-    if (!editingId || !activeSession) return;
-    if (!formulationName.trim()) {
-      toast.error("请填写配方名称");
-      return;
-    }
-    setSessionData((prev) => ({
-      ...prev,
-      formulations: prev.formulations.map((f) =>
-        f.id === editingId
-          ? {
-              ...snapshotFormulation(editingId),
-              createdAt: f.createdAt,
-            }
-          : f
-      ),
-    }));
-    toast.success("已更新");
+    // Keep workspace values as-is so the user can tune and add a variant.
   }
 
   function loadFormulationToWorkspace(f: BenchFormulation) {
@@ -182,8 +200,6 @@ export default function ScreeningMode() {
       prep: { ...f.prep },
     });
     setFormulationName(f.name);
-    setEditingId(f.id);
-    // Scroll to top of workspace so the user sees the loaded data.
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -191,15 +207,12 @@ export default function ScreeningMode() {
 
   function handleBenchChange(next: BenchFormulation[]) {
     setSessionData((prev) => ({ ...prev, formulations: next }));
-    // If the formulation currently being edited was removed, clear edit state.
-    if (editingId && !next.some((f) => f.id === editingId)) {
-      resetWorkspace();
-    }
   }
 
   async function handleExportPdf() {
     if (!activeSession || sessionData.formulations.length === 0) return;
     setExporting(true);
+    const toastId = toast.loading("PDF 生成中，请等待...");
     try {
       const mod = await import("@/lib/export/lnp-bench-pdf");
       await mod.exportBenchToPdf(
@@ -208,10 +221,10 @@ export default function ScreeningMode() {
         activeSession.updated_at,
         sessionData.formulations
       );
-      toast.success("PDF 已生成");
+      toast.success("PDF 生成成功", { id: toastId });
     } catch (e) {
       console.error(e);
-      toast.error("导出 PDF 失败");
+      toast.error("导出 PDF 失败", { id: toastId });
     } finally {
       setExporting(false);
     }
@@ -388,22 +401,10 @@ export default function ScreeningMode() {
                     <RotateCcw className="h-4 w-4" />
                     清空编辑区
                   </Button>
-                  {editingId ? (
-                    <Button onClick={updateInBench} className="gap-2">
-                      <Save className="h-4 w-4" />
-                      更新实验台
-                    </Button>
-                  ) : (
-                    <Button onClick={addToBench} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      加入实验台
-                    </Button>
-                  )}
-                  {editingId && (
-                    <span className="text-xs text-muted-foreground">
-                      正在编辑已有配方
-                    </span>
-                  )}
+                  <Button onClick={addToBench} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    加入实验台
+                  </Button>
                 </div>
               }
             />
@@ -429,15 +430,14 @@ export default function ScreeningMode() {
               <CardHeader>
                 <CardTitle className="text-base">实验台</CardTitle>
                 <CardDescription>
-                  每行一个配方，展示配方摘要与所需吸取体积。可拖动排序、多选批量删除、重命名、复制、点击
-                  ▶ 载回工作区编辑。
+                  每行一个配方，展示配方摘要与所需吸取体积。可拖动排序、多选删除、重命名、复制、点击
+                  ▶ 载回工作区。
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ScreeningBench
                   formulations={sessionData.formulations}
                   onChange={handleBenchChange}
-                  activeEditingId={editingId}
                   onLoad={loadFormulationToWorkspace}
                   onExportPdf={handleExportPdf}
                   onExportXlsx={handleExportXlsx}

@@ -10,7 +10,6 @@ import {
   pdf,
 } from "@react-pdf/renderer";
 import {
-  composeLipidSummary,
   computeBenchFormulation,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
@@ -38,7 +37,9 @@ const styles = StyleSheet.create({
   page: {
     fontFamily: "NotoSansSC",
     fontSize: 9,
-    padding: 28,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
     lineHeight: 1.35,
     color: "#222",
   },
@@ -54,11 +55,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 700,
   },
-  subtitle: {
-    fontSize: 9,
-    color: "#555",
-    marginTop: 2,
-  },
   meta: {
     fontSize: 9,
     color: "#555",
@@ -68,14 +64,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 6,
-    marginBottom: 10,
+    marginBottom: 8,
     fontSize: 9,
     color: "#555",
   },
   card: {
-    marginBottom: 10,
+    marginBottom: 6,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     border: "0.5pt solid #ccc",
     borderRadius: 3,
   },
@@ -83,7 +79,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
+    marginBottom: 4,
   },
   cardIndex: {
     width: 20,
@@ -99,23 +95,23 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: "#888",
   },
+  sectionLabel: {
+    fontSize: 8,
+    fontWeight: 700,
+    color: "#555",
+    marginBottom: 2,
+  },
   compositionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     borderTop: "0.5pt solid #eee",
-    paddingTop: 4,
+    paddingTop: 3,
     marginTop: 2,
   },
   lipidCell: {
     width: "25%",
     paddingRight: 6,
     paddingBottom: 2,
-  },
-  lipidLabel: {
-    fontSize: 8,
-    color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
   lipidName: {
     fontSize: 9,
@@ -133,8 +129,8 @@ const styles = StyleSheet.create({
   paramsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 4,
-    paddingTop: 4,
+    marginTop: 3,
+    paddingTop: 3,
     borderTop: "0.5pt dashed #ddd",
     fontSize: 9,
   },
@@ -150,8 +146,8 @@ const styles = StyleSheet.create({
   },
   volumesRow: {
     flexDirection: "row",
-    marginTop: 4,
-    paddingTop: 4,
+    marginTop: 3,
+    paddingTop: 3,
     borderTop: "0.5pt dashed #ddd",
   },
   volumeCol: {
@@ -169,9 +165,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: "absolute",
-    bottom: 14,
-    left: 28,
-    right: 28,
+    bottom: 10,
+    left: 18,
+    right: 18,
     flexDirection: "row",
     justifyContent: "space-between",
     fontSize: 8,
@@ -200,9 +196,6 @@ export function BenchDocument({
         <View style={styles.header} fixed>
           <View>
             <Text style={styles.title}>LNP 配方筛选 · {sessionName}</Text>
-            <Text style={styles.subtitle}>
-              Lipid Mix 体积为刚好覆盖所需 RNA 用量的理论值（零余量）
-            </Text>
           </View>
           <View>
             <Text style={styles.meta}>
@@ -218,7 +211,12 @@ export function BenchDocument({
         </View>
 
         {formulations.map((f, i) => (
-          <FormulationCard key={f.id} index={i + 1} formulation={f} />
+          <FormulationCard
+            key={f.id}
+            index={i + 1}
+            formulation={f}
+            breakPage={i > 0 && i % 3 === 0}
+          />
         ))}
 
         <View style={styles.footer} fixed>
@@ -237,15 +235,17 @@ export function BenchDocument({
 function FormulationCard({
   index,
   formulation,
+  breakPage,
 }: {
   index: number;
   formulation: BenchFormulation;
+  breakPage: boolean;
 }) {
   const computed = computeBenchFormulation(formulation);
   const { prepVolumes, stockVolumes, totalConc } = computed;
 
   return (
-    <View style={styles.card} wrap={false}>
+    <View style={styles.card} wrap={false} break={breakPage}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardIndex}>#{index}</Text>
         <Text style={styles.cardName}>
@@ -257,13 +257,13 @@ function FormulationCard({
       </View>
 
       {/* Row 1 — composition */}
+      <Text style={styles.sectionLabel}>配方</Text>
       <View style={styles.compositionRow}>
         {formulation.lipidEntries.map((e) => {
           const name = e.isCustomLipid ? e.customLipidName : e.lipidName;
           const vol = stockVolumes?.[e.id];
           return (
             <View key={e.id} style={styles.lipidCell}>
-              <Text style={styles.lipidLabel}>{e.label}</Text>
               <Text style={styles.lipidName}>{name || "?"}</Text>
               <Text style={styles.lipidDetail}>
                 {e.molarRatio || "0"}% · MW {e.molarWeight || "?"} · Stock{" "}
@@ -278,6 +278,7 @@ function FormulationCard({
       </View>
 
       {/* Params */}
+      <Text style={[styles.sectionLabel, { marginTop: 4 }]}>制备参数</Text>
       <View style={styles.paramsRow}>
         <View style={styles.paramCell}>
           <Text style={styles.paramLabel}>N/P</Text>
@@ -368,9 +369,6 @@ function FormulationCard({
             ) : (
               <Text>--</Text>
             )}
-          </Text>
-          <Text style={[styles.volumeLine, { color: "#888", fontSize: 8 }]}>
-            {composeLipidSummary(formulation)}
           </Text>
         </View>
       </View>

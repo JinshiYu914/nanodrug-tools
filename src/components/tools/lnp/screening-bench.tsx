@@ -27,11 +27,9 @@ import {
   Play,
   FileDown,
   FileSpreadsheet,
-  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +49,6 @@ import { formatVolume } from "@/lib/calculations/lnp-formula";
 interface Props {
   formulations: BenchFormulation[];
   onChange: (next: BenchFormulation[]) => void;
-  activeEditingId: string | null;
   onLoad: (f: BenchFormulation) => void;
   onExportPdf?: () => void;
   onExportXlsx?: () => void;
@@ -61,7 +58,6 @@ interface Props {
 export default function ScreeningBench({
   formulations,
   onChange,
-  activeEditingId,
   onLoad,
   onExportPdf,
   onExportXlsx,
@@ -181,7 +177,7 @@ export default function ScreeningBench({
               className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              批量删除
+              删除
             </Button>
           )}
           <Button
@@ -227,7 +223,6 @@ export default function ScreeningBench({
                   key={f.id}
                   index={i + 1}
                   f={f}
-                  isActive={f.id === activeEditingId}
                   isSelected={selected.has(f.id)}
                   isRenaming={renamingId === f.id}
                   onToggleSelect={() => toggleSelected(f.id)}
@@ -252,7 +247,6 @@ export default function ScreeningBench({
 function FormulationCard({
   index,
   f,
-  isActive,
   isSelected,
   isRenaming,
   onToggleSelect,
@@ -265,7 +259,6 @@ function FormulationCard({
 }: {
   index: number;
   f: BenchFormulation;
-  isActive: boolean;
   isSelected: boolean;
   isRenaming: boolean;
   onToggleSelect: () => void;
@@ -299,11 +292,7 @@ function FormulationCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border bg-card transition-colors ${
-        isActive
-          ? "border-primary ring-1 ring-primary/30"
-          : "hover:border-muted-foreground/30"
-      }`}
+      className="rounded-lg border bg-card transition-colors hover:border-muted-foreground/30"
     >
       <div className="flex items-stretch gap-2 px-3 py-2">
         {/* Drag handle */}
@@ -440,13 +429,9 @@ function FormulationCard({
             variant="ghost"
             className="h-7 w-7"
             onClick={onLoad}
-            title="载入到工作区编辑"
+            title="载入工作区"
           >
-            {isActive ? (
-              <Check className="h-3.5 w-3.5 text-primary" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
+            <Play className="h-3.5 w-3.5" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -476,15 +461,6 @@ function FormulationCard({
         </div>
       </div>
 
-      {/* Active editing indicator */}
-      {isActive && (
-        <>
-          <Separator />
-          <p className="px-3 py-1.5 text-[10px] text-primary">
-            当前正在编辑此配方。修改后点击「更新实验台」保存。
-          </p>
-        </>
-      )}
     </div>
   );
 }
