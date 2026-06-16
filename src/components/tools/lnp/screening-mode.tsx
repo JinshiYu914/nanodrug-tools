@@ -209,8 +209,8 @@ export default function ScreeningMode() {
     setSessionData((prev) => ({ ...prev, formulations: next }));
   }
 
-  async function handleExportPdf() {
-    if (!activeSession || sessionData.formulations.length === 0) return;
+  async function handleExportPdf(formulations: BenchFormulation[]) {
+    if (!activeSession || formulations.length === 0) return;
     setExporting(true);
     const toastId = toast.loading("PDF 生成中，请等待...");
     try {
@@ -219,7 +219,7 @@ export default function ScreeningMode() {
         activeSession.name,
         activeSession.created_at,
         activeSession.updated_at,
-        sessionData.formulations
+        formulations
       );
       toast.success("PDF 生成成功", { id: toastId });
     } catch (e) {
@@ -230,14 +230,14 @@ export default function ScreeningMode() {
     }
   }
 
-  function handleExportXlsx() {
-    if (!activeSession || sessionData.formulations.length === 0) return;
+  function handleExportXlsx(formulations: BenchFormulation[]) {
+    if (!activeSession || formulations.length === 0) return;
     try {
       exportBenchToXlsx(
         activeSession.name,
         activeSession.created_at,
         activeSession.updated_at,
-        sessionData.formulations
+        formulations
       );
       toast.success("Excel 已生成");
     } catch (e) {

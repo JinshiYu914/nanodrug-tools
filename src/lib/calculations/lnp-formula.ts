@@ -43,7 +43,7 @@ export const STANDARD_TYPES: StandardTypeInfo[] = [
     defaultLipid: "SM-102",
     defaultMW: "710.18",
     defaultRatio: "50",
-    defaultStock: "75",
+    defaultStock: "50",
   },
   {
     key: "helper",
