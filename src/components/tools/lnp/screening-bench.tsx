@@ -50,8 +50,8 @@ interface Props {
   formulations: BenchFormulation[];
   onChange: (next: BenchFormulation[]) => void;
   onLoad: (f: BenchFormulation) => void;
-  onExportPdf?: () => void;
-  onExportXlsx?: () => void;
+  onExportPdf?: (formulations: BenchFormulation[]) => void;
+  onExportXlsx?: (formulations: BenchFormulation[]) => void;
   busy?: boolean;
 }
 
@@ -147,6 +147,18 @@ export default function ScreeningBench({
     formulations.length > 0 && selected.size === formulations.length;
   const someSelected = selected.size > 0 && !allSelected;
 
+  // Export targets: a partial selection exports only the checked formulations;
+  // no selection (or "select all") exports the whole bench.
+  const exportList = useMemo(
+    () =>
+      someSelected
+        ? formulations.filter((f) => selected.has(f.id))
+        : formulations,
+    [someSelected, formulations, selected]
+  );
+  const exportLabel = (format: string) =>
+    someSelected ? `导出所选 ${format}` : `导出 ${format}`;
+
   return (
     <div className="space-y-3">
       {/* Toolbar */}
@@ -183,22 +195,22 @@ export default function ScreeningBench({
           <Button
             size="sm"
             variant="outline"
-            onClick={onExportPdf}
+            onClick={() => onExportPdf?.(exportList)}
             disabled={busy || formulations.length === 0 || !onExportPdf}
             className="h-7 gap-1.5 text-xs"
           >
             <FileDown className="h-3.5 w-3.5" />
-            导出 PDF
+            {exportLabel("PDF")}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={onExportXlsx}
+            onClick={() => onExportXlsx?.(exportList)}
             disabled={busy || formulations.length === 0 || !onExportXlsx}
             className="h-7 gap-1.5 text-xs"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            导出 Excel
+            {exportLabel("Excel")}
           </Button>
         </div>
       </div>

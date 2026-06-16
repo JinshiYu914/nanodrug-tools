@@ -8,8 +8,10 @@ import {
   CheckCheck,
   FlaskConical,
   LogIn,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,10 +33,17 @@ import {
   type BenchPrepParams,
 } from "@/lib/calculations/lnp-bench";
 import {
+  computeStockVolumes,
+  entriesToComponents,
   formatVolume,
   type LipidEntry,
 } from "@/lib/calculations/lnp-formula";
 import { createClient } from "@/lib/supabase/client";
+
+const num = (s: string) => {
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
 
 export default function LnpFormulaPage() {
   // ── Normal mode state (mirrors the old single-formulation page) ──
@@ -42,6 +51,7 @@ export default function LnpFormulaPage() {
     createDefaultWorkspaceValue
   );
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // ── Auth gating for screening mode ──
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -104,13 +114,29 @@ export default function LnpFormulaPage() {
   // ── Copy (normal mode) ──
   function copyResults() {
     const lines: string[] = ["=== LNP 配方计算结果 ===", ""];
-    const { totalConc, stockVolumes, prepVolumes } = computeBenchFormulation({
+    const { totalConc, prepVolumes } = computeBenchFormulation({
       id: "local",
       name: "local",
       lipidEntries: normal.lipidEntries,
       prep: normal.prep,
       createdAt: new Date().toISOString(),
     });
+
+    // Step 1 stock volumes use the user-entered target Lipid Mix volume
+    // (normal mode), matching the live Step 1 display — NOT the
+    // screening-derived "just enough" volume that computeBenchFormulation returns.
+    const targetVolume_uL =
+      normal.volumeUnit === "mL"
+        ? num(normal.targetVolume) * 1000
+        : num(normal.targetVolume);
+    const stockVolumes =
+      targetVolume_uL > 0
+        ? computeStockVolumes({
+            components: entriesToComponents(normal.lipidEntries),
+            targetVolume: targetVolume_uL,
+            volumeUnit: "uL",
+          })
+        : null;
 
     lines.push("【Lipid Mix 配方】");
     for (const entry of normal.lipidEntries) {
@@ -163,6 +189,27 @@ export default function LnpFormulaPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  // ── Export to Word (normal mode) ──
+  async function exportWord() {
+    setExporting(true);
+    const toastId = toast.loading("Word 生成中...");
+    try {
+      const mod = await import("@/lib/export/lnp-formula-docx");
+      await mod.exportFormulationToDocx({
+        lipidEntries: normal.lipidEntries,
+        targetVolume: normal.targetVolume,
+        volumeUnit: normal.volumeUnit,
+        prep: normal.prep,
+      });
+      toast.success("Word 已导出", { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error("导出 Word 失败", { id: toastId });
+    } finally {
+      setExporting(false);
+    }
   }
 
   function handleReset() {
@@ -254,6 +301,15 @@ export default function LnpFormulaPage() {
                     <Copy className="h-4 w-4" />
                   )}
                   {copied ? "已复制" : "复制计算结果"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={exportWord}
+                  disabled={exporting}
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  {exporting ? "导出中..." : "导出 Word"}
                 </Button>
               </div>
             }
