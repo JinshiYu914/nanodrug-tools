@@ -49,6 +49,10 @@ export interface FormulaDocInput {
   targetVolume: string;
   volumeUnit: "uL" | "mL";
   prep: BenchPrepParams;
+  /** Target Lipid Mix volume derived from the RNA prep amount (Step 2). */
+  autoLipidMixFromRna?: boolean;
+  /** Prepare an extra 100 µL of organic phase for syringe dead volume. */
+  extraLipidPhase?: boolean;
 }
 
 const num = (s: string) => {
@@ -242,77 +246,12 @@ function paramChips(rows: Array<[string, string]>): Table {
   });
 }
 
-/** A phase column (水相 / 脂相) as a borderless cell with line items + total. */
-function phaseCell(
-  title: string,
-  accent: string,
-  items: Array<[string, number | null]>,
-  total: number | null
-): TableCell {
-  const lineRow = (label: string, uL: number | null, isTotal = false) =>
-    new TableRow({
-      children: [
-        new TableCell({
-          children: [
-            p([
-              run(label, {
-                size: SZ_BODY,
-                color: isTotal ? INK : MUTED,
-                bold: isTotal,
-              }),
-            ]),
-          ],
-          borders: isTotal
-            ? { ...noBorders(), top: { style: BorderStyle.SINGLE, size: 4, color: accent } }
-            : noBorders(),
-          margins: { top: 14, bottom: 14, left: 0, right: 0 },
-          width: { size: 55, type: WidthType.PERCENTAGE },
-        }),
-        new TableCell({
-          children: [
-            p(
-              [
-                run(fmtVol(uL), {
-                  size: isTotal ? SZ_DATA : SZ_BODY,
-                  bold: isTotal,
-                  color: isTotal ? accent : INK,
-                }),
-              ],
-              AlignmentType.RIGHT
-            ),
-          ],
-          borders: isTotal
-            ? { ...noBorders(), top: { style: BorderStyle.SINGLE, size: 4, color: accent } }
-            : noBorders(),
-          margins: { top: 14, bottom: 14, left: 0, right: 0 },
-          width: { size: 45, type: WidthType.PERCENTAGE },
-        }),
-      ],
-    });
-
-  const inner = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders(),
-    rows: [
-      ...items.map(([l, v]) => lineRow(l, v)),
-      lineRow("Total", total, true),
-    ],
-  });
-
-  return new TableCell({
-    children: [
-      new Paragraph({
-        spacing: { after: 30 },
-        children: [run(title, { size: SZ_BODY, bold: true, color: accent })],
-      }),
-      inner,
-    ],
-    borders: noBorders(),
-    margins: { top: 40, bottom: 20, left: 100, right: 100 },
-    width: { size: 50, type: WidthType.PERCENTAGE },
-  });
-}
-
+/**
+ * Both phases (水相 / 脂相) as a SINGLE fixed-layout 4-column table:
+ *   [水相 label | 水相 value | 脂相 label | 脂相 value]
+ * Avoids nested / auto-layout tables, which Word collapses to one CJK
+ * character per line when placed after another table.
+ */
 function phaseTable(prepVolumes: {
   rnaVolume_uL: number | null;
   cbBuffer_uL: number | null;
@@ -321,30 +260,108 @@ function phaseTable(prepVolumes: {
   ethanol_uL: number | null;
   organicTotal_uL: number | null;
 }): Table {
+  // 28 / 22 / 28 / 22 of the usable width.
+  const COLS = [3024, 2376, 3024, 2376];
+  const GAP = 260; // visual gutter before the 脂相 column
+
+  const labelCell = (
+    text: string,
+    w: number,
+    opts: { bold?: boolean; accent?: string; top?: boolean; leftPad?: number } = {}
+  ) =>
+    new TableCell({
+      children: [
+        p([
+          run(text, {
+            size: SZ_BODY,
+            color: opts.bold ? INK : MUTED,
+            bold: opts.bold,
+          }),
+        ]),
+      ],
+      width: { size: w, type: WidthType.DXA },
+      borders: opts.top
+        ? { ...noBorders(), top: { style: BorderStyle.SINGLE, size: 4, color: opts.accent ?? INK } }
+        : noBorders(),
+      margins: { top: 16, bottom: 16, left: opts.leftPad ?? 0, right: 0 },
+    });
+
+  const valueCell = (
+    uL: number | null,
+    w: number,
+    opts: { bold?: boolean; accent?: string; top?: boolean } = {}
+  ) =>
+    new TableCell({
+      children: [
+        p(
+          [
+            run(fmtVol(uL), {
+              size: opts.bold ? SZ_DATA : SZ_BODY,
+              bold: opts.bold,
+              color: opts.bold ? opts.accent ?? INK : INK,
+            }),
+          ],
+          AlignmentType.RIGHT
+        ),
+      ],
+      width: { size: w, type: WidthType.DXA },
+      borders: opts.top
+        ? { ...noBorders(), top: { style: BorderStyle.SINGLE, size: 4, color: opts.accent ?? INK } }
+        : noBorders(),
+      margins: { top: 16, bottom: 16, left: 0, right: 0 },
+    });
+
+  const titleCell = (text: string, accent: string, leftPad = 0) =>
+    new TableCell({
+      columnSpan: 2,
+      children: [
+        new Paragraph({
+          spacing: { after: 0 },
+          children: [run(text, { size: SZ_BODY, bold: true, color: accent })],
+        }),
+      ],
+      borders: noBorders(),
+      margins: { top: 20, bottom: 30, left: leftPad, right: 0 },
+    });
+
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED,
+    columnWidths: COLS,
+    width: { size: USABLE_WIDTH, type: WidthType.DXA },
     borders: noBorders(),
     rows: [
+      // Phase titles.
       new TableRow({
         children: [
-          phaseCell(
-            "水相 Aqueous",
-            AQUEOUS,
-            [
-              ["RNA", prepVolumes.rnaVolume_uL],
-              ["Citrate buffer", prepVolumes.cbBuffer_uL],
-            ],
-            prepVolumes.aqueousTotal_uL
-          ),
-          phaseCell(
-            "脂相 Organic",
-            ORGANIC,
-            [
-              ["Lipid mix", prepVolumes.lipidMix_uL],
-              ["Ethanol", prepVolumes.ethanol_uL],
-            ],
-            prepVolumes.organicTotal_uL
-          ),
+          titleCell("水相 Aqueous", AQUEOUS),
+          titleCell("脂相 Organic", ORGANIC, GAP),
+        ],
+      }),
+      // Line 1: RNA / Lipid mix.
+      new TableRow({
+        children: [
+          labelCell("RNA", COLS[0]),
+          valueCell(prepVolumes.rnaVolume_uL, COLS[1]),
+          labelCell("Lipid mix", COLS[2], { leftPad: GAP }),
+          valueCell(prepVolumes.lipidMix_uL, COLS[3]),
+        ],
+      }),
+      // Line 2: Citrate buffer / Ethanol.
+      new TableRow({
+        children: [
+          labelCell("Citrate buffer", COLS[0]),
+          valueCell(prepVolumes.cbBuffer_uL, COLS[1]),
+          labelCell("Ethanol", COLS[2], { leftPad: GAP }),
+          valueCell(prepVolumes.ethanol_uL, COLS[3]),
+        ],
+      }),
+      // Totals.
+      new TableRow({
+        children: [
+          labelCell("Total", COLS[0], { bold: true, accent: AQUEOUS, top: true }),
+          valueCell(prepVolumes.aqueousTotal_uL, COLS[1], { bold: true, accent: AQUEOUS, top: true }),
+          labelCell("Total", COLS[2], { bold: true, accent: ORGANIC, top: true, leftPad: GAP }),
+          valueCell(prepVolumes.organicTotal_uL, COLS[3], { bold: true, accent: ORGANIC, top: true }),
         ],
       }),
     ],
@@ -357,18 +374,24 @@ function buildDocument(input: FormulaDocInput): Document {
   const { lipidEntries, targetVolume, volumeUnit, prep } = input;
 
   // Step 2 results (totalConc + prep volumes) — independent of Step 1 volume.
-  const { totalConc, prepVolumes } = computeBenchFormulation({
-    id: "local",
-    name: "local",
-    lipidEntries,
-    prep,
-    createdAt: new Date().toISOString(),
-  });
+  const { totalConc, prepVolumes } = computeBenchFormulation(
+    {
+      id: "local",
+      name: "local",
+      lipidEntries,
+      prep,
+      createdAt: new Date().toISOString(),
+    },
+    { extraLipidPhase_uL: input.extraLipidPhase ? 100 : 0 }
+  );
 
-  // Step 1 stock volumes use the user-entered target Lipid Mix volume,
-  // matching the live Step 1 display.
-  const targetVolume_uL =
-    volumeUnit === "mL" ? num(targetVolume) * 1000 : num(targetVolume);
+  // Step 1 stock volumes use the target Lipid Mix volume shown in Step 1:
+  // the RNA-derived volume when that option is on, else the manual entry.
+  const targetVolume_uL = input.autoLipidMixFromRna
+    ? prepVolumes.lipidMix_uL ?? 0
+    : volumeUnit === "mL"
+    ? num(targetVolume) * 1000
+    : num(targetVolume);
   const stockVolumes =
     targetVolume_uL > 0
       ? computeStockVolumes({
@@ -433,13 +456,17 @@ function buildDocument(input: FormulaDocInput): Document {
       ["N/P 比", `${prep.npRatio || "--"}`],
       ["RNA", `${prep.rnaMass || "--"} µg @ ${prep.rnaConc || "--"}`],
     ]),
+    // Empty paragraph keeps Word from merging the two adjacent tables.
+    new Paragraph({ spacing: { after: 40 }, children: [] }),
     phaseTable(prepVolumes),
   ];
 
   // ── Combined total (compact, right-aligned) ──
+  // Uses the nominal reaction organic volume so the dead-volume surplus does
+  // not inflate the reported system total (it only affects the prep amounts).
   if (
     prepVolumes.aqueousTotal_uL !== null &&
-    prepVolumes.organicTotal_uL !== null
+    prepVolumes.organicReactionTotal_uL !== null
   ) {
     children.push(
       new Paragraph({
@@ -448,8 +475,28 @@ function buildDocument(input: FormulaDocInput): Document {
         children: [
           run("两相总体积  ", { size: SZ_BODY, color: MUTED }),
           run(
-            fmtVol(prepVolumes.aqueousTotal_uL + prepVolumes.organicTotal_uL),
+            fmtVol(
+              prepVolumes.aqueousTotal_uL +
+                prepVolumes.organicReactionTotal_uL
+            ),
             { size: SZ_HEADING, bold: true }
+          ),
+        ],
+      })
+    );
+  }
+
+  if (input.extraLipidPhase) {
+    children.push(
+      new Paragraph({
+        spacing: { before: 20 },
+        children: [
+          run(
+            "* 脂相 Lipid mix / Ethanol 已多配 100 µL 用于填充微流控注射器死体积；脂相总量、两相总体积为反应体系体积，不含该余量。",
+            {
+              size: SZ_SMALL,
+              color: MUTED,
+            }
           ),
         ],
       })

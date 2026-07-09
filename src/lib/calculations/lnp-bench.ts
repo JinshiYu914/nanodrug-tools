@@ -69,7 +69,8 @@ export function parseBenchSession(
  * RNA mass + N/P + ionizable ratio — i.e. `prepVolumes.lipidMix_uL`.
  */
 export function computeBenchFormulation(
-  f: BenchFormulation
+  f: BenchFormulation,
+  opts: { extraLipidPhase_uL?: number } = {}
 ): BenchComputed {
   const components = entriesToComponents(f.lipidEntries);
   const totalConc = computeTotalConcentration(components);
@@ -97,6 +98,7 @@ export function computeBenchFormulation(
     rnaConc_ug_per_uL: num(f.prep.rnaConc),
     aminesPerMolecule: amines > 0 ? amines : 1,
     ionizableRatio,
+    extraLipidPhase_uL: opts.extraLipidPhase_uL ?? 0,
   });
 
   const requiredLipidMix_uL = prepVolumes.lipidMix_uL;

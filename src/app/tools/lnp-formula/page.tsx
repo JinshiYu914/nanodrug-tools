@@ -114,21 +114,25 @@ export default function LnpFormulaPage() {
   // ── Copy (normal mode) ──
   function copyResults() {
     const lines: string[] = ["=== LNP 配方计算结果 ===", ""];
-    const { totalConc, prepVolumes } = computeBenchFormulation({
-      id: "local",
-      name: "local",
-      lipidEntries: normal.lipidEntries,
-      prep: normal.prep,
-      createdAt: new Date().toISOString(),
-    });
+    const { totalConc, prepVolumes } = computeBenchFormulation(
+      {
+        id: "local",
+        name: "local",
+        lipidEntries: normal.lipidEntries,
+        prep: normal.prep,
+        createdAt: new Date().toISOString(),
+      },
+      { extraLipidPhase_uL: normal.extraLipidPhase ? 100 : 0 }
+    );
 
-    // Step 1 stock volumes use the user-entered target Lipid Mix volume
-    // (normal mode), matching the live Step 1 display — NOT the
-    // screening-derived "just enough" volume that computeBenchFormulation returns.
-    const targetVolume_uL =
-      normal.volumeUnit === "mL"
-        ? num(normal.targetVolume) * 1000
-        : num(normal.targetVolume);
+    // Step 1 stock volumes use the target Lipid Mix volume shown live in
+    // Step 1: the derived "just enough" volume when the user opted into
+    // RNA-based sizing, otherwise their manual entry.
+    const targetVolume_uL = normal.autoLipidMixFromRna
+      ? prepVolumes.lipidMix_uL ?? 0
+      : normal.volumeUnit === "mL"
+      ? num(normal.targetVolume) * 1000
+      : num(normal.targetVolume);
     const stockVolumes =
       targetVolume_uL > 0
         ? computeStockVolumes({
@@ -150,7 +154,11 @@ export default function LnpFormulaPage() {
     }
 
     lines.push(
-      `\nLipid Mix 目标体积: ${normal.targetVolume} ${normal.volumeUnit === "uL" ? "µL" : "mL"}`
+      `\nLipid Mix 目标体积: ${
+        normal.autoLipidMixFromRna
+          ? `${formatVolume(targetVolume_uL)}（按 RNA 制备量自动计算）`
+          : `${normal.targetVolume} ${normal.volumeUnit === "uL" ? "µL" : "mL"}`
+      }`
     );
     if (totalConc) {
       lines.push(
@@ -165,6 +173,9 @@ export default function LnpFormulaPage() {
     lines.push(
       `RNA: ${normal.prep.rnaMass} µg @ ${normal.prep.rnaConc} µg/µL (${normal.prep.naType})`
     );
+    if (normal.extraLipidPhase) {
+      lines.push("多配置脂相: 是（+100 µL，填充微流控死体积）");
+    }
 
     lines.push("\n【水相 Aqueous】");
     lines.push(`RNA: ${formatVolume(prepVolumes.rnaVolume_uL)}`);
@@ -178,10 +189,13 @@ export default function LnpFormulaPage() {
 
     if (
       prepVolumes.aqueousTotal_uL !== null &&
-      prepVolumes.organicTotal_uL !== null
+      prepVolumes.organicReactionTotal_uL !== null
     ) {
       lines.push(
-        `\n两相总体积: ${formatVolume(prepVolumes.aqueousTotal_uL + prepVolumes.organicTotal_uL)}`
+        `\n脂相总量（反应体系）: ${formatVolume(prepVolumes.organicReactionTotal_uL)}`
+      );
+      lines.push(
+        `两相总体积（反应体系）: ${formatVolume(prepVolumes.aqueousTotal_uL + prepVolumes.organicReactionTotal_uL)}`
       );
     }
 
@@ -202,6 +216,8 @@ export default function LnpFormulaPage() {
         targetVolume: normal.targetVolume,
         volumeUnit: normal.volumeUnit,
         prep: normal.prep,
+        autoLipidMixFromRna: normal.autoLipidMixFromRna,
+        extraLipidPhase: normal.extraLipidPhase,
       });
       toast.success("Word 已导出", { id: toastId });
     } catch (e) {
