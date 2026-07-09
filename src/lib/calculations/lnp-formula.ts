@@ -170,6 +170,13 @@ export interface PreparationParams {
   rnaConc_ug_per_uL: number;
   aminesPerMolecule: number;
   ionizableRatio: number;
+  /**
+   * Extra organic-phase volume (µL) to prepare beyond the reaction amount —
+   * e.g. to fill the syringe dead volume in microfluidic mixing. Default 0.
+   * Lipid mix + ethanol are scaled up proportionally so the master-mix
+   * concentration is preserved; the aqueous phase is left untouched.
+   */
+  extraLipidPhase_uL?: number;
 }
 
 export interface PreparationVolumes {
@@ -178,7 +185,12 @@ export interface PreparationVolumes {
   lipidMix_uL: number | null;
   ethanol_uL: number | null;
   aqueousTotal_uL: number | null;
+  /** Organic phase you actually prepare (includes the extra dead-volume
+   *  surplus when requested) — equals lipidMix_uL + ethanol_uL. */
   organicTotal_uL: number | null;
+  /** Nominal organic phase in the reaction system, i.e. before any extra
+   *  dead-volume surplus. Equals organicTotal_uL when no surplus is added. */
+  organicReactionTotal_uL: number | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -350,6 +362,7 @@ export function computePreparationVolumes(
     ethanol_uL: null,
     aqueousTotal_uL: null,
     organicTotal_uL: null,
+    organicReactionTotal_uL: null,
   };
 
   if (params.rnaConc_ug_per_uL > 0 && params.rnaMass_ug > 0) {
@@ -387,6 +400,8 @@ export function computePreparationVolumes(
   if (c_target_M > 0 && c_total_M > 0 && vol_lipidmix_L > 0) {
     const vol_org_L = (c_total_M / c_target_M) * vol_lipidmix_L;
     result.organicTotal_uL = round(vol_org_L * 1e6, 2);
+    // Nominal reaction-system organic total, unaffected by any surplus below.
+    result.organicReactionTotal_uL = result.organicTotal_uL;
 
     if (result.lipidMix_uL !== null && result.organicTotal_uL > 0) {
       result.ethanol_uL = round(
@@ -412,6 +427,29 @@ export function computePreparationVolumes(
     } else {
       result.cbBuffer_uL = result.aqueousTotal_uL;
     }
+  }
+
+  // Extra organic-phase prep (dead-volume filler): grow the *prepared* organic
+  // volume by the requested amount, scaling lipid mix + ethanol together so the
+  // master-mix concentration stays the same. Applied after the aqueous phase is
+  // derived, so both the aqueous volume and the nominal reaction organic total
+  // (organicReactionTotal_uL) stay at the reaction amount.
+  const extra = params.extraLipidPhase_uL ?? 0;
+  if (
+    extra > 0 &&
+    result.organicTotal_uL !== null &&
+    result.organicTotal_uL > 0 &&
+    result.lipidMix_uL !== null
+  ) {
+    const baseOrganic = result.organicTotal_uL;
+    const newOrganic = round(baseOrganic + extra, 2);
+    const scale = newOrganic / baseOrganic;
+    result.lipidMix_uL = round(result.lipidMix_uL * scale, 2);
+    result.organicTotal_uL = newOrganic;
+    result.ethanol_uL = round(
+      Math.max(newOrganic - result.lipidMix_uL, 0),
+      2
+    );
   }
 
   return result;

@@ -40,6 +40,12 @@ export interface WorkspaceValue {
   lipidEntries: LipidEntry[];
   targetVolume: string;
   volumeUnit: "uL" | "mL";
+  /** Normal mode only: derive the target Lipid Mix volume from the RNA prep
+   *  amount (Step 2) instead of a manual entry. Ignored in screening mode. */
+  autoLipidMixFromRna?: boolean;
+  /** Normal mode only: prepare an extra 100 µL of organic phase to fill the
+   *  microfluidic syringe dead volume. Ignored in screening mode. */
+  extraLipidPhase?: boolean;
   prep: BenchPrepParams;
 }
 
@@ -48,13 +54,15 @@ export function createDefaultWorkspaceValue(): WorkspaceValue {
     lipidEntries: createDefaultEntries(),
     targetVolume: "",
     volumeUnit: "uL",
+    autoLipidMixFromRna: false,
+    extraLipidPhase: false,
     prep: {
-      masterConc: "8",
+      masterConc: "10",
       frrAqueous: "3",
       frrOrganic: "1",
       npRatio: "6",
       rnaMass: "",
-      rnaConc: "",
+      rnaConc: "1",
       naType: "mRNA",
       aminesPerMolecule: "1",
     },
@@ -198,6 +206,9 @@ export default function FormulationWorkspace({
     ? getAminesPerMolecule(ionizableEntry.lipidName)
     : 1;
 
+  // Extra 100 µL organic prep is a normal-mode-only option (Step 2 checkbox).
+  const extraLipidPhase_uL = !isScreening && value.extraLipidPhase ? 100 : 0;
+
   const prepVolumes = useMemo(
     () =>
       computePreparationVolumes(totalConc, {
@@ -209,12 +220,16 @@ export default function FormulationWorkspace({
         rnaConc_ug_per_uL: num(value.prep.rnaConc),
         aminesPerMolecule: amines > 0 ? amines : 1,
         ionizableRatio,
+        extraLipidPhase_uL,
       }),
-    [totalConc, value.prep, amines, ionizableRatio]
+    [totalConc, value.prep, amines, ionizableRatio, extraLipidPhase_uL]
   );
 
-  // In screening mode, Step 1 target volume is auto-derived from Step 2.
-  const effectiveTargetVolume_uL = isScreening
+  // Whether Step 1's target Lipid Mix volume is auto-derived from Step 2.
+  // Always true in screening; opt-in via checkbox in normal mode.
+  const autoLipidMix = isScreening || !!value.autoLipidMixFromRna;
+
+  const effectiveTargetVolume_uL = autoLipidMix
     ? prepVolumes.lipidMix_uL ?? 0
     : value.volumeUnit === "mL"
     ? num(value.targetVolume) * 1000
@@ -317,29 +332,56 @@ export default function FormulationWorkspace({
               )}
             </div>
 
-            {/* Target volume (normal: editable · screening: derived) */}
+            {/* Target volume (normal: editable / auto · screening: derived) */}
             <div className="space-y-1 max-w-sm">
-              <Label className="text-sm font-medium">
-                {isScreening
-                  ? "所需 Lipid Mix 体积（自动计算）"
-                  : "目标 Lipid Mix 体积"}
-                <span
-                  className="ml-1 text-muted-foreground cursor-help"
-                  title={
-                    isScreening
-                      ? "由下方 RNA 用量、N/P 比和可电离脂质比反推得到"
-                      : "配置好的 lipid mix 可低温保存数天，根据需要配置合适体积"
-                  }
-                >
-                  <Info className="inline h-3.5 w-3.5" />
-                </span>
-              </Label>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Label className="text-sm font-medium">
+                  {autoLipidMix
+                    ? "所需 Lipid Mix 体积（自动计算）"
+                    : "目标 Lipid Mix 体积"}
+                  <span
+                    className="ml-1 text-muted-foreground cursor-help"
+                    title={
+                      autoLipidMix
+                        ? "由下方 RNA 用量、N/P 比和可电离脂质比反推得到"
+                        : "配置好的 lipid mix 可低温保存数天，根据需要配置合适体积"
+                    }
+                  >
+                    <Info className="inline h-3.5 w-3.5" />
+                  </span>
+                </Label>
 
-              {isScreening ? (
-                <div className="flex h-9 items-center rounded-md bg-muted/50 px-3 text-sm font-mono">
-                  {prepVolumes.lipidMix_uL !== null
-                    ? formatVolume(prepVolumes.lipidMix_uL)
-                    : "-- (先输入 RNA 用量)"}
+                {!isScreening && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!value.autoLipidMixFromRna}
+                      onChange={(e) =>
+                        onChange((prev) => ({
+                          ...prev,
+                          autoLipidMixFromRna: e.target.checked,
+                        }))
+                      }
+                      className="h-3.5 w-3.5 rounded border-input accent-primary"
+                    />
+                    按照 RNA 制备量配置
+                  </label>
+                )}
+              </div>
+
+              {autoLipidMix ? (
+                <div className="flex h-9 items-center rounded-md bg-muted/50 px-3">
+                  {prepVolumes.lipidMix_uL !== null ? (
+                    <span className="text-sm font-mono">
+                      {formatVolume(prepVolumes.lipidMix_uL)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {isScreening
+                        ? "-- (先输入 RNA 用量)"
+                        : "请输入 LNP 制备参数和 RNA 量，此处自动计算"}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -521,6 +563,31 @@ export default function FormulationWorkspace({
                     未添加可电离脂质，N/P 计算不可用
                   </div>
                 )}
+
+                {!isScreening && (
+                  <label className="flex cursor-pointer select-none items-start gap-2 rounded-md border border-dashed p-3">
+                    <input
+                      type="checkbox"
+                      checked={!!value.extraLipidPhase}
+                      onChange={(e) =>
+                        onChange((prev) => ({
+                          ...prev,
+                          extraLipidPhase: e.target.checked,
+                        }))
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium text-foreground">
+                        多配置 100 µL 脂相
+                      </span>
+                      <span className="mt-0.5 block text-muted-foreground">
+                        脂相（Lipid mix + Ethanol）总体积额外增加 100
+                        µL，用于填充微流控注射器死体积；脂相浓度保持不变。
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
 
               {/* ── Right: RNA inputs + volume results ── */}
@@ -638,7 +705,7 @@ export default function FormulationWorkspace({
                 </div>
 
                 {prepVolumes.aqueousTotal_uL !== null &&
-                  prepVolumes.organicTotal_uL !== null && (
+                  prepVolumes.organicReactionTotal_uL !== null && (
                     <div className="rounded-lg bg-muted/50 p-4">
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
@@ -654,7 +721,7 @@ export default function FormulationWorkspace({
                             脂相总量
                           </p>
                           <p className="text-lg font-bold font-mono">
-                            {formatVolume(prepVolumes.organicTotal_uL)}
+                            {formatVolume(prepVolumes.organicReactionTotal_uL)}
                           </p>
                         </div>
                         <div>
@@ -664,11 +731,17 @@ export default function FormulationWorkspace({
                           <p className="text-lg font-bold font-mono">
                             {formatVolume(
                               prepVolumes.aqueousTotal_uL +
-                                prepVolumes.organicTotal_uL
+                                prepVolumes.organicReactionTotal_uL
                             )}
                           </p>
                         </div>
                       </div>
+                      {extraLipidPhase_uL > 0 && (
+                        <p className="mt-3 text-xs text-muted-foreground text-center">
+                          脂相总量 / 两相总体积 为反应体系体积；上方 Lipid mix、Ethanol
+                          已多配 100 µL 用于填充微流控死体积。
+                        </p>
+                      )}
                     </div>
                   )}
               </div>
