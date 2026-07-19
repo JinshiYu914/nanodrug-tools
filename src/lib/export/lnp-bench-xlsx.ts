@@ -1,152 +1,304 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import {
-  composeLipidSummary,
-  composeRatioSummary,
   computeBenchFormulation,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
+import type { LipidEntry } from "@/lib/calculations/lnp-formula";
 
-type Cell = string | number | null;
-type Row = Cell[];
+/**
+ * Column layout (0-indexed) — one row per formulation with a two-row header.
+ *
+ *  0 序号 | 1 配方名称 | 2‑6 Lipid mix配置 | 7‑8 水相 | 9‑10 脂相 |
+ *  11 水相总体积 | 12 脂相总体积 | 13 总体积 | 14‑16 制备参数
+ *
+ * Every data cell is a volume in µL (2 decimals) except 序号, N/P ratio (a
+ * ratio), FRR (an "aqueous:organic" string) and Lipid mix concs (mM).
+ */
+const COL = {
+  index: 0,
+  name: 1,
+  ionizable: 2,
+  helper: 3,
+  cholesterol: 4,
+  peg: 5,
+  extras: 6,
+  rna: 7,
+  cb: 8,
+  lipidMix: 9,
+  ethanol: 10,
+  aqTotal: 11,
+  orTotal: 12,
+  grandTotal: 13,
+  np: 14,
+  frr: 15,
+  mixConc: 16,
+} as const;
+const N_COLS = 17;
 
-const HEADER: string[] = [
-  "#",
-  "配方名称",
-  "行类型",
-  "Ionizable",
-  "Helper",
-  "Cholesterol",
-  "PEG",
-  "其他",
-  "N/P",
-  "脂相浓度 (mM)",
-  "FRR",
-  "RNA (µg)",
-  "RNA 浓度 (µg/µL)",
-  "Lipid Mix 总浓度 (mM)",
-  "Lipid Mix 总体积 (µL)",
-  "水相 Total (µL)",
-  "脂相 Total (µL)",
-  "摘要",
-];
+const STANDARD_SLOTS = new Set(["ionizable", "helper", "cholesterol", "peg"]);
 
-function cellCompositionText(e: {
-  isCustomLipid: boolean;
-  lipidName: string;
-  customLipidName: string;
-  molarRatio: string;
-  molarWeight: string;
-  stockConc: string;
-}): string {
-  const name = e.isCustomLipid ? e.customLipidName : e.lipidName;
-  return `${name || "?"}, ${e.molarRatio || "0"}%, MW ${e.molarWeight || "?"}, Stock ${e.stockConc || "?"} mg/mL`;
+// ─── Palette (section-coded headers, matching the worksheet template) ─────
+const FILL_LIPID_TOP = "B4C6E7"; // Lipid mix配置 — blue
+const FILL_LIPID_SUB = "DDEBF7";
+const FILL_AQ_TOP = "FCE4D6"; // 水相 — peach
+const FILL_AQ_SUB = "FCEFE6";
+const FILL_OR_TOP = "E2EFDA"; // 脂相 — green
+const FILL_OR_SUB = "EDF6E6";
+const FILL_NEUTRAL = "FFFFFF";
+
+const thin = { style: "thin", color: { rgb: "000000" } } as const;
+const BORDER = { top: thin, bottom: thin, left: thin, right: thin };
+
+function headerStyle(fill: string) {
+  return {
+    font: { bold: true, sz: 10, color: { rgb: "000000" } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    fill: { patternType: "solid", fgColor: { rgb: fill } },
+    border: BORDER,
+  };
 }
 
-function cellVolumeText(uL: number | undefined): string {
-  if (uL === undefined || uL === null || isNaN(uL)) return "--";
-  if (uL >= 1000) return `${(uL / 1000).toFixed(3)} mL`;
-  return `${uL.toFixed(2)} µL`;
+// Numeric µL / mM cells (2-decimal display) and "plain" cells (序号, N/P, FRR)
+// must use *separate* style objects: xlsx-js-style folds a cell's number
+// format into its shared style, so mixing formatted and unformatted cells on
+// one object leaks "0.00" onto the unformatted ones.
+const numStyle = {
+  font: { sz: 10 },
+  alignment: { horizontal: "center", vertical: "center" },
+  border: BORDER,
+};
+
+const plainStyle = {
+  font: { sz: 10 },
+  alignment: { horizontal: "center", vertical: "center" },
+  border: BORDER,
+};
+
+const nameStyle = {
+  font: { sz: 10 },
+  alignment: { horizontal: "left", vertical: "center", wrapText: true },
+  border: BORDER,
+};
+
+// Columns whose values are volumes/concentrations shown to 2 decimals.
+const DECIMAL_COLS = new Set<number>([
+  COL.ionizable,
+  COL.helper,
+  COL.cholesterol,
+  COL.peg,
+  COL.extras,
+  COL.rna,
+  COL.cb,
+  COL.lipidMix,
+  COL.ethanol,
+  COL.aqTotal,
+  COL.orTotal,
+  COL.grandTotal,
+  COL.mixConc,
+]);
+
+// ─── Header-label helpers ─────────────────────────────────────────────────
+
+function entryName(e: LipidEntry): string {
+  return (e.isCustomLipid ? e.customLipidName : e.lipidName) || "";
+}
+
+function uniq(values: string[]): string[] {
+  return Array.from(new Set(values.filter((v) => v && v.trim() !== "")));
 }
 
 /**
- * Produce two sheet rows per formulation:
- *   Row A — composition (name/ratio/MW/stock per lipid slot)
- *   Row B — aspirate volumes (per-lipid stock volume + aqueous/organic totals)
- * The name column (col B) is merged across the two rows.
+ * Build a sub-header for a standard lipid slot: the concrete lipid name plus
+ * its stock concentration in parentheses. The concentration is only shown
+ * when every exported formulation agrees on it (otherwise a single value in a
+ * shared column header would be misleading); the name alone is shown instead.
  */
-function buildRows(formulations: BenchFormulation[]): {
-  rows: Row[];
+function slotHeader(
+  forms: BenchFormulation[],
+  typeKey: string,
+  fallback: string
+): string {
+  const entries = forms
+    .map((f) => f.lipidEntries.find((e) => e.typeKey === typeKey))
+    .filter((e): e is LipidEntry => !!e);
+  if (entries.length === 0) return fallback;
+  const names = uniq(entries.map(entryName));
+  const nameLabel = names.length ? names.join(" / ") : fallback;
+  const concs = uniq(entries.map((e) => e.stockConc));
+  return concs.length === 1
+    ? `${nameLabel} (${concs[0]} mg/mL)`
+    : nameLabel;
+}
+
+function extrasHeader(forms: BenchFormulation[]): string {
+  const extras = forms.flatMap((f) =>
+    f.lipidEntries.filter((e) => !STANDARD_SLOTS.has(e.typeKey))
+  );
+  if (extras.length === 0) return "其他组分";
+  const names = uniq(extras.map(entryName));
+  const nameLabel = names.length ? names.join(" / ") : "其他组分";
+  const concs = uniq(extras.map((e) => e.stockConc));
+  return concs.length === 1 ? `${nameLabel} (${concs[0]} mg/mL)` : nameLabel;
+}
+
+function rnaHeader(forms: BenchFormulation[]): string {
+  const concs = uniq(forms.map((f) => f.prep.rnaConc));
+  return concs.length === 1 ? `RNA (${concs[0]} µg/µL)` : "RNA";
+}
+
+// ─── Row assembly ─────────────────────────────────────────────────────────
+
+type Cell = string | number;
+
+/** Round to 2 decimals; blank for missing/non-finite values. */
+function v2(value: number | null | undefined): Cell {
+  return value === null || value === undefined || !isFinite(value)
+    ? ""
+    : Number(value.toFixed(2));
+}
+
+function buildAoa(forms: BenchFormulation[]): {
+  aoa: Cell[][];
   merges: XLSX.Range[];
 } {
-  const rows: Row[] = [HEADER];
-  const merges: XLSX.Range[] = [];
+  const h0: Cell[] = new Array(N_COLS).fill("");
+  h0[COL.index] = "序号";
+  h0[COL.name] = "配方名称";
+  h0[COL.ionizable] = "Lipid mix配置";
+  h0[COL.rna] = "水相";
+  h0[COL.lipidMix] = "脂相";
+  h0[COL.aqTotal] = "水相总体积";
+  h0[COL.orTotal] = "脂相总体积";
+  h0[COL.grandTotal] = "总体积";
+  h0[COL.np] = "制备参数";
 
-  formulations.forEach((f, i) => {
+  const h1: Cell[] = new Array(N_COLS).fill("");
+  h1[COL.ionizable] = slotHeader(forms, "ionizable", "SM102");
+  h1[COL.helper] = slotHeader(forms, "helper", "DSPC");
+  h1[COL.cholesterol] = slotHeader(forms, "cholesterol", "Cho");
+  h1[COL.peg] = slotHeader(forms, "peg", "PEG");
+  h1[COL.extras] = extrasHeader(forms);
+  h1[COL.rna] = rnaHeader(forms);
+  h1[COL.cb] = "CB (10mM)";
+  h1[COL.lipidMix] = "Lipid mix";
+  h1[COL.ethanol] = "乙醇";
+  h1[COL.np] = "N/P ratio";
+  h1[COL.frr] = "FRR";
+  h1[COL.mixConc] = "Lipid mix concs(mM)";
+
+  const aoa: Cell[][] = [h0, h1];
+
+  forms.forEach((f, i) => {
     const { stockVolumes, prepVolumes, totalConc } =
       computeBenchFormulation(f);
 
-    const byType: Record<string, (typeof f.lipidEntries)[number] | undefined> = {
-      ionizable: undefined,
-      helper: undefined,
-      cholesterol: undefined,
-      peg: undefined,
-    };
-    const extras: typeof f.lipidEntries = [];
+    const byType: Record<string, LipidEntry | undefined> = {};
+    const extras: LipidEntry[] = [];
     for (const e of f.lipidEntries) {
-      if (e.typeKey in byType) byType[e.typeKey] = e;
+      if (STANDARD_SLOTS.has(e.typeKey)) byType[e.typeKey] = e;
       else extras.push(e);
     }
 
-    const topRow: Row = [
-      i + 1,
-      f.name || "(未命名)",
-      "组成",
-      byType.ionizable ? cellCompositionText(byType.ionizable) : "",
-      byType.helper ? cellCompositionText(byType.helper) : "",
-      byType.cholesterol ? cellCompositionText(byType.cholesterol) : "",
-      byType.peg ? cellCompositionText(byType.peg) : "",
-      extras.map(cellCompositionText).join(" | "),
-      f.prep.npRatio || "",
-      f.prep.masterConc || "",
-      `${f.prep.frrAqueous}:${f.prep.frrOrganic}`,
-      f.prep.rnaMass || "",
-      f.prep.rnaConc || "",
-      totalConc ? Number(totalConc.mM.toFixed(3)) : "",
-      "",
-      "",
-      "",
-      `${composeLipidSummary(f)} (${composeRatioSummary(f)})`,
-    ];
+    const volOf = (e: LipidEntry | undefined): number | null | undefined =>
+      e ? stockVolumes?.[e.id]?.uL : undefined;
 
-    const vol = (typeKey: string): string => {
-      const entry = byType[typeKey];
-      if (!entry) return "";
-      return cellVolumeText(stockVolumes?.[entry.id]?.uL);
-    };
-    const extrasVol = extras
-      .map((e) => `${e.customLipidName || e.lipidName || "?"}: ${cellVolumeText(stockVolumes?.[e.id]?.uL)}`)
-      .join(" | ");
+    const extrasVol = extras.reduce((sum, e) => {
+      const uL = stockVolumes?.[e.id]?.uL;
+      return uL != null && isFinite(uL) ? sum + uL : sum;
+    }, 0);
 
-    const bottomRow: Row = [
-      "",
-      "",
-      "吸取体积",
-      vol("ionizable"),
-      vol("helper"),
-      vol("cholesterol"),
-      vol("peg"),
-      extrasVol,
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      prepVolumes.lipidMix_uL !== null
-        ? Number(prepVolumes.lipidMix_uL.toFixed(2))
-        : "",
-      prepVolumes.aqueousTotal_uL !== null
-        ? Number(prepVolumes.aqueousTotal_uL.toFixed(2))
-        : "",
-      prepVolumes.organicTotal_uL !== null
-        ? Number(prepVolumes.organicTotal_uL.toFixed(2))
-        : "",
-      "",
-    ];
+    const aq = prepVolumes.aqueousTotal_uL;
+    const org = prepVolumes.organicTotal_uL;
+    const grand = aq != null && org != null ? aq + org : null;
 
-    rows.push(topRow, bottomRow);
+    const np = parseFloat(f.prep.npRatio);
 
-    // Merge cells for # and 配方名称 columns (cols 0, 1) across both rows.
-    const topRowIdx = rows.length - 2;
-    const bottomRowIdx = rows.length - 1;
-    merges.push(
-      { s: { r: topRowIdx, c: 0 }, e: { r: bottomRowIdx, c: 0 } },
-      { s: { r: topRowIdx, c: 1 }, e: { r: bottomRowIdx, c: 1 } }
-    );
+    const row: Cell[] = new Array(N_COLS).fill("");
+    row[COL.index] = i + 1;
+    row[COL.name] = f.name || "(未命名)";
+    row[COL.ionizable] = v2(volOf(byType.ionizable));
+    row[COL.helper] = v2(volOf(byType.helper));
+    row[COL.cholesterol] = v2(volOf(byType.cholesterol));
+    row[COL.peg] = v2(volOf(byType.peg));
+    row[COL.extras] = extras.length ? v2(extrasVol) : "";
+    row[COL.rna] = v2(prepVolumes.rnaVolume_uL);
+    row[COL.cb] = v2(prepVolumes.cbBuffer_uL);
+    row[COL.lipidMix] = v2(prepVolumes.lipidMix_uL);
+    row[COL.ethanol] = v2(prepVolumes.ethanol_uL);
+    row[COL.aqTotal] = v2(aq);
+    row[COL.orTotal] = v2(org);
+    row[COL.grandTotal] = v2(grand);
+    row[COL.np] = isFinite(np) ? np : "";
+    row[COL.frr] = `${f.prep.frrAqueous}:${f.prep.frrOrganic}`;
+    row[COL.mixConc] = totalConc ? Number(totalConc.mM.toFixed(2)) : "";
+
+    aoa.push(row);
   });
 
-  return { rows, merges };
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: COL.index }, e: { r: 1, c: COL.index } },
+    { s: { r: 0, c: COL.name }, e: { r: 1, c: COL.name } },
+    { s: { r: 0, c: COL.ionizable }, e: { r: 0, c: COL.extras } },
+    { s: { r: 0, c: COL.rna }, e: { r: 0, c: COL.cb } },
+    { s: { r: 0, c: COL.lipidMix }, e: { r: 0, c: COL.ethanol } },
+    { s: { r: 0, c: COL.aqTotal }, e: { r: 1, c: COL.aqTotal } },
+    { s: { r: 0, c: COL.orTotal }, e: { r: 1, c: COL.orTotal } },
+    { s: { r: 0, c: COL.grandTotal }, e: { r: 1, c: COL.grandTotal } },
+    { s: { r: 0, c: COL.np }, e: { r: 0, c: COL.mixConc } },
+  ];
+
+  return { aoa, merges };
 }
+
+// ─── Styling ──────────────────────────────────────────────────────────────
+
+function topFill(c: number): string {
+  if (c >= COL.ionizable && c <= COL.extras) return FILL_LIPID_TOP;
+  if (c >= COL.rna && c <= COL.cb) return FILL_AQ_TOP;
+  if (c >= COL.lipidMix && c <= COL.ethanol) return FILL_OR_TOP;
+  return FILL_NEUTRAL;
+}
+
+function subFill(c: number): string {
+  if (c >= COL.ionizable && c <= COL.extras) return FILL_LIPID_SUB;
+  if (c >= COL.rna && c <= COL.cb) return FILL_AQ_SUB;
+  if (c >= COL.lipidMix && c <= COL.ethanol) return FILL_OR_SUB;
+  return FILL_NEUTRAL;
+}
+
+function applyStyles(ws: XLSX.WorkSheet, rowCount: number): void {
+  const ensure = (r: number, c: number): XLSX.CellObject => {
+    const ref = XLSX.utils.encode_cell({ r, c });
+    let cell = ws[ref] as XLSX.CellObject | undefined;
+    if (!cell) {
+      cell = { t: "s", v: "" };
+      ws[ref] = cell;
+    }
+    return cell;
+  };
+
+  for (let c = 0; c < N_COLS; c++) {
+    ensure(0, c).s = headerStyle(topFill(c));
+    ensure(1, c).s = headerStyle(subFill(c));
+  }
+
+  for (let r = 2; r < rowCount; r++) {
+    for (let c = 0; c < N_COLS; c++) {
+      const cell = ensure(r, c);
+      if (c === COL.name) {
+        cell.s = nameStyle;
+      } else if (DECIMAL_COLS.has(c)) {
+        cell.s = numStyle;
+        cell.z = "0.00";
+      } else {
+        // 序号 (integer), N/P ratio, FRR — no forced decimals.
+        cell.s = plainStyle;
+      }
+    }
+  }
+}
+
+// ─── Public entry point ───────────────────────────────────────────────────
 
 export function exportBenchToXlsx(
   sessionName: string,
@@ -156,33 +308,33 @@ export function exportBenchToXlsx(
 ): void {
   if (formulations.length === 0) return;
 
-  const { rows, merges } = buildRows(formulations);
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const { aoa, merges } = buildAoa(formulations);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!merges"] = merges;
 
-  // Column widths.
   ws["!cols"] = [
-    { wch: 4 }, // #
-    { wch: 22 }, // 配方名称
-    { wch: 10 }, // 行类型
-    { wch: 32 }, // Ionizable
-    { wch: 28 }, // Helper
-    { wch: 28 }, // Cholesterol
-    { wch: 30 }, // PEG
-    { wch: 24 }, // 其他
-    { wch: 6 }, // N/P
-    { wch: 14 }, // 脂相浓度
+    { wch: 6 }, // 序号
+    { wch: 18 }, // 配方名称
+    { wch: 15 }, // ionizable
+    { wch: 15 }, // helper
+    { wch: 15 }, // cholesterol
+    { wch: 15 }, // PEG
+    { wch: 15 }, // 其他组分
+    { wch: 13 }, // RNA
+    { wch: 13 }, // CB
+    { wch: 12 }, // Lipid mix
+    { wch: 10 }, // 乙醇
+    { wch: 11 }, // 水相总体积
+    { wch: 11 }, // 脂相总体积
+    { wch: 11 }, // 总体积
+    { wch: 9 }, // N/P ratio
     { wch: 8 }, // FRR
-    { wch: 10 }, // RNA
-    { wch: 16 }, // RNA 浓度
-    { wch: 18 }, // Lipid Mix 总浓度
-    { wch: 18 }, // Lipid Mix 总体积
-    { wch: 16 }, // 水相
-    { wch: 16 }, // 脂相
-    { wch: 40 }, // 摘要
+    { wch: 18 }, // Lipid mix concs(mM)
   ];
+  ws["!rows"] = [{ hpt: 20 }, { hpt: 30 }];
 
-  // Prepend a metadata row via second sheet for context.
+  applyStyles(ws, aoa.length);
+
   const meta = XLSX.utils.aoa_to_sheet([
     ["筛选会话", sessionName],
     ["创建时间", formatIso(createdAt)],
@@ -190,9 +342,10 @@ export function exportBenchToXlsx(
     ["导出时间", formatNow()],
     ["配方数量", formulations.length],
     [],
-    ["说明", "Lipid Mix 体积为刚好覆盖所需 RNA 用量的理论值（零余量）"],
+    ["单位说明", "所有体积单位为 µL，保留 2 位小数"],
+    ["体积说明", "Lipid mix 体积为刚好覆盖所需 RNA 用量的理论值（零余量）"],
   ]);
-  meta["!cols"] = [{ wch: 18 }, { wch: 40 }];
+  meta["!cols"] = [{ wch: 18 }, { wch: 44 }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Formulations");
@@ -202,7 +355,7 @@ export function exportBenchToXlsx(
   XLSX.writeFile(wb, filename);
 }
 
-// ─── Helpers ──────────────────────────────────────────────
+// ─── Date / filename helpers ──────────────────────────────────────────────
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
