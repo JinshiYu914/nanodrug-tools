@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentUserId } from "@/lib/supabase/use-user";
 import * as XLSX from "xlsx";
 
 interface Fragment {
@@ -118,11 +119,12 @@ export function LigationCalc() {
 
   const supabase = useMemo(() => createClient(), []);
 
+  // Resolves from the tab-wide shared lookup instead of its own network call.
   const checkAuth = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUserId(user?.id ?? null);
-    return user?.id ?? null;
-  }, [supabase]);
+    const uid = await getCurrentUserId();
+    setUserId(uid);
+    return uid;
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
