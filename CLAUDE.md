@@ -45,6 +45,12 @@ Calculation logic is intentionally separated from UI so it can be unit-tested or
 
 Authenticated users can save formulas/preparations into a tree (folders + items) backed by the `lnp_saved_items` table ([supabase/migrations/001_lnp_saved_items.sql](supabase/migrations/001_lnp_saved_items.sql)). Self-referential `parent_id` gives the hierarchy; RLS policies scope every row to `auth.uid() = user_id`. All access goes through [src/lib/supabase/lnp-service.ts](src/lib/supabase/lnp-service.ts), which exposes CRUD + `buildTree(items)` for assembling the nested structure consumed by [lnp-saved-panel.tsx](src/components/tools/lnp-saved-panel.tsx). New saved-data features should follow the same service-module pattern instead of calling Supabase from components directly.
 
+The `type` column is the discriminator for every saved-data feature and is widened by a migration each time one is added — currently `formula`, `preparation`, `screening_session`, `ribogreen_curve`, `ribogreen_result`. Adding a new kind means a migration that DROPs and re-ADDs `lnp_saved_items_type_check` (see [002](supabase/migrations/002_lnp_screening_sessions.sql) / [003](supabase/migrations/003_ribogreen.sql)) plus widening `LnpItemType`; no new table or RLS policy is needed. Note Supabase surfaces errors as plain `PostgrestError` objects, not `Error` instances, so read `.message`/`.code` off the object when sniffing for `42P01` / `23514`.
+
+### RiboGreen tab
+
+[src/components/tools/ribogreen/](src/components/tools/ribogreen/) implements the 包封率/浓度 calculator mounted as the third tab of [src/app/tools/lnp-formula/page.tsx](src/app/tools/lnp-formula/page.tsx). Its `Tabs` is controlled so the shared `<LnpWorkflow />` diagram can be hidden on this tab, and the RiboGreen `TabsContent` is `forceMount`ed (wrapped in a `hidden` div) so the sample grid survives tab switches. All math lives in [src/lib/calculations/ribogreen.ts](src/lib/calculations/ribogreen.ts) with the instrument standard curves in [ribogreen-presets.ts](src/lib/calculations/ribogreen-presets.ts). Unit contract: the standard curve maps 读数 → ng/mL, 稀释倍数 is applied **after** the curve, and everything shown in the UI is ng/µL.
+
 ## Conventions
 
 - Path alias `@/*` → `./src/*`.

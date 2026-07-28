@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Dna,
   RotateCcw,
@@ -9,6 +9,7 @@ import {
   FlaskConical,
   LogIn,
   FileText,
+  TestTube2,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import FormulationWorkspace, {
   type WorkspaceValue,
 } from "@/components/tools/lnp/formulation-workspace";
 import ScreeningMode from "@/components/tools/lnp/screening-mode";
+import RibogreenMode from "@/components/tools/ribogreen/ribogreen-mode";
 import {
   computeBenchFormulation,
   type BenchPrepParams,
@@ -38,14 +40,19 @@ import {
   formatVolume,
   type LipidEntry,
 } from "@/lib/calculations/lnp-formula";
-import { createClient } from "@/lib/supabase/client";
+import { useUser } from "@/lib/supabase/use-user";
 
 const num = (s: string) => {
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 };
 
+type TabKey = "normal" | "screening" | "ribogreen";
+
 export default function LnpFormulaPage() {
+  // Controlled so the workflow diagram can be hidden on the RiboGreen tab.
+  const [tab, setTab] = useState<TabKey>("normal");
+
   // ── Normal mode state (mirrors the old single-formulation page) ──
   const [normal, setNormal] = useState<WorkspaceValue>(
     createDefaultWorkspaceValue
@@ -54,15 +61,8 @@ export default function LnpFormulaPage() {
   const [exporting, setExporting] = useState(false);
 
   // ── Auth gating for screening mode ──
-  const [authed, setAuthed] = useState<boolean | null>(null);
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setAuthed(!!data.user));
-    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
-      setAuthed(!!session?.user);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  const { user, loading: authLoading } = useUser();
+  const authed: boolean | null = authLoading ? null : !!user;
 
   // ── Normal mode: save/load with LnpSavedPanel ──
   const getFormulaData = useCallback(
@@ -256,7 +256,11 @@ export default function LnpFormulaPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="normal" className="space-y-6">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as TabKey)}
+        className="space-y-6"
+      >
         <TabsList className="flex h-auto w-fit gap-1 bg-transparent p-0">
           <TabsTrigger
             value="normal"
@@ -271,6 +275,13 @@ export default function LnpFormulaPage() {
           >
             <FlaskConical className="h-3.5 w-3.5" />
             配方筛选（批量）
+          </TabsTrigger>
+          <TabsTrigger
+            value="ribogreen"
+            className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:shadow-none"
+          >
+            <TestTube2 className="h-3.5 w-3.5" />
+            RiboGreen 包封率
           </TabsTrigger>
         </TabsList>
 
@@ -380,14 +391,25 @@ export default function LnpFormulaPage() {
             <ScreeningMode />
           )}
         </TabsContent>
+
+        {/* ═══ RiboGreen Mode ══════════════════════════════ */}
+        {/* forceMount keeps the sample grid alive while the user bounces
+            between tabs — Radix unmounts inactive TabsContent by default. */}
+        <TabsContent value="ribogreen" className="space-y-0" forceMount>
+          <div className={tab === "ribogreen" ? "" : "hidden"}>
+            <RibogreenMode active={tab === "ribogreen"} />
+          </div>
+        </TabsContent>
       </Tabs>
 
-      {/* ═══ Workflow Diagram (shared) ════════════════════ */}
-      <Card className="mt-6">
-        <CardContent className="pt-6">
-          <LnpWorkflow />
-        </CardContent>
-      </Card>
+      {/* ═══ Workflow Diagram (formulation tabs only) ═════ */}
+      {tab !== "ribogreen" && (
+        <Card className="mt-6">
+          <CardContent className="pt-6">
+            <LnpWorkflow />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
