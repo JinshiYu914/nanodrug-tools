@@ -37,7 +37,7 @@ import {
   type LnpSavedItem,
   type TreeNode,
 } from "@/lib/supabase/lnp-service";
-import { createClient } from "@/lib/supabase/client";
+import { getCurrentUserId } from "@/lib/supabase/use-user";
 import * as XLSX from "xlsx";
 
 type SortMode = "time" | "name" | "custom";
@@ -129,13 +129,13 @@ export default function LnpSavedPanel({
 
   const indexMap = useMemo(() => buildIndexMap(sortedTree), [sortedTree]);
 
+  // Resolves from the tab-wide shared lookup — four of these panels mount on
+  // /tools/lnp-formula, and one getUser() each used to serialize on the auth
+  // Web Lock until the last ones hit the 10s timeout.
   const checkAuth = useCallback(async () => {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    setUserId(user?.id ?? null);
-    return user?.id ?? null;
+    const uid = await getCurrentUserId();
+    setUserId(uid);
+    return uid;
   }, []);
 
   const refresh = useCallback(async () => {

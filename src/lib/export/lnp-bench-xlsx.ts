@@ -12,7 +12,10 @@ import type { LipidEntry } from "@/lib/calculations/lnp-formula";
  *  11 水相总体积 | 12 脂相总体积 | 13 总体积 | 14‑16 制备参数
  *
  * Every data cell is a volume in µL (2 decimals) except 序号, N/P ratio (a
- * ratio), FRR (an "aqueous:organic" string) and Lipid mix concs (mM).
+ * ratio), FRR (an "aqueous:organic" string) and 脂相浓度 (mM).
+ *
+ * The three 制备参数 columns all carry the user's typed input, never a derived
+ * value — keep it that way.
  */
 const COL = {
   index: 0,
@@ -184,13 +187,12 @@ function buildAoa(forms: BenchFormulation[]): {
   h1[COL.ethanol] = "乙醇";
   h1[COL.np] = "N/P ratio";
   h1[COL.frr] = "FRR";
-  h1[COL.mixConc] = "Lipid mix concs(mM)";
+  h1[COL.mixConc] = "脂相浓度(mM)";
 
   const aoa: Cell[][] = [h0, h1];
 
   forms.forEach((f, i) => {
-    const { stockVolumes, prepVolumes, totalConc } =
-      computeBenchFormulation(f);
+    const { stockVolumes, prepVolumes } = computeBenchFormulation(f);
 
     const byType: Record<string, LipidEntry | undefined> = {};
     const extras: LipidEntry[] = [];
@@ -212,6 +214,10 @@ function buildAoa(forms: BenchFormulation[]): {
     const grand = aq != null && org != null ? aq + org : null;
 
     const np = parseFloat(f.prep.npRatio);
+    // 制备参数 = what the user typed. This column used to write the *computed*
+    // totalConc.mM (the assembled stock's concentration), which is a different
+    // quantity — the PDF export keeps them apart as 脂相浓度 vs Lipid Mix 总浓度.
+    const masterConc = parseFloat(f.prep.masterConc);
 
     const row: Cell[] = new Array(N_COLS).fill("");
     row[COL.index] = i + 1;
@@ -230,7 +236,7 @@ function buildAoa(forms: BenchFormulation[]): {
     row[COL.grandTotal] = v2(grand);
     row[COL.np] = isFinite(np) ? np : "";
     row[COL.frr] = `${f.prep.frrAqueous}:${f.prep.frrOrganic}`;
-    row[COL.mixConc] = totalConc ? Number(totalConc.mM.toFixed(2)) : "";
+    row[COL.mixConc] = isFinite(masterConc) ? masterConc : "";
 
     aoa.push(row);
   });

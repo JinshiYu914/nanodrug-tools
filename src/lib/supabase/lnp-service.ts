@@ -1,6 +1,11 @@
 import { createClient } from "./client";
 
-export type LnpItemType = "formula" | "preparation" | "screening_session";
+export type LnpItemType =
+  | "formula"
+  | "preparation"
+  | "screening_session"
+  | "ribogreen_curve"
+  | "ribogreen_result";
 
 export interface LnpSavedItem {
   id: string;
