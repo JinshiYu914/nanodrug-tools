@@ -4,11 +4,27 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * "Bench Sketch" — hand-drawn cartoon system for LNP Partner.
+ *
+ * Ground is warm paper, every outline and every glyph is one indigo ink, and
+ * the three research pillars carry colours taken from what they actually are
+ * on the bench: amber = the lipid/organic phase, teal = the aqueous phase,
+ * magenta = tissue.
+ *
+ * Two rules keep this from eating the calculators:
+ *   1. Nothing here hardcodes a hex. Components use tokens, so light/dark and
+ *      any future re-tint are one edit in this file.
+ *   2. `.quiet` (bottom of this file) strips the heavy outlines and hard
+ *      shadows for dense scientific UI. Everything under /tools/* wears it.
+ * ------------------------------------------------------------------------- */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-outfit);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -38,6 +54,36 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Bench Sketch additions */
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+
+  --color-pillar-lnp: var(--pillar-lnp);
+  --color-pillar-lnp-subtle: var(--pillar-lnp-subtle);
+  --color-pillar-utr: var(--pillar-utr);
+  --color-pillar-utr-subtle: var(--pillar-utr-subtle);
+  --color-pillar-disease: var(--pillar-disease);
+  --color-pillar-disease-subtle: var(--pillar-disease-subtle);
+  --color-accent-utility: var(--accent-utility);
+  --color-accent-utility-subtle: var(--accent-utility-subtle);
+  --color-highlight: var(--highlight);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+
+  --shadow-sticker: 4px 4px 0 var(--ink);
+  --shadow-sticker-lg: 6px 6px 0 var(--ink);
+  --shadow-sticker-sm: 2px 2px 0 var(--ink);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -48,72 +94,133 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 1rem;
+
+  /* Ground + ink */
+  --paper: oklch(0.978 0.011 84);
+  --ink: oklch(0.3 0.095 283);
+  --ink-soft: oklch(0.52 0.045 283);
+
+  /* shadcn surface tokens, re-valued onto the paper/ink pair */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: oklch(1 0.004 84);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0.004 84);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.7 0.175 48);
+  --primary-foreground: oklch(0.22 0.07 283);
+  --secondary: oklch(0.945 0.014 84);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.945 0.014 84);
+  --muted-foreground: var(--ink-soft);
+  --accent: oklch(0.93 0.02 84);
+  --accent-foreground: var(--ink);
+  --destructive: oklch(0.58 0.21 27);
+  --border: oklch(0.88 0.018 84);
+  --input: oklch(0.88 0.018 84);
+  --ring: oklch(0.7 0.175 48);
+
+  /* Research pillars — organic phase / aqueous phase / tissue */
+  --pillar-lnp: oklch(0.7 0.175 48);
+  --pillar-lnp-subtle: oklch(0.95 0.035 60);
+  --pillar-utr: oklch(0.62 0.115 190);
+  --pillar-utr-subtle: oklch(0.95 0.03 190);
+  --pillar-disease: oklch(0.65 0.19 355);
+  --pillar-disease-subtle: oklch(0.95 0.03 355);
+  --accent-utility: oklch(0.66 0.14 275);
+  --accent-utility-subtle: oklch(0.95 0.03 275);
+  --highlight: oklch(0.86 0.16 92);
+
+  /* Semantic status — the calculators use colour to mean something */
+  --success: oklch(0.58 0.13 155);
+  --success-foreground: oklch(0.99 0.005 155);
+  --success-subtle: oklch(0.95 0.04 155);
+  --warning: oklch(0.66 0.15 70);
+  --warning-foreground: oklch(0.22 0.07 283);
+  --warning-subtle: oklch(0.955 0.045 80);
+  --info: oklch(0.6 0.12 245);
+  --info-foreground: oklch(0.99 0.005 245);
+  --info-subtle: oklch(0.95 0.03 245);
+
+  /* Categorical chart scale. Hue is CONSTANT across light/dark — only
+     lightness and chroma move. scatter-fit-chart.tsx reads chart-1 (points)
+     and chart-2 (fit line) by name, and previously they swapped hue families
+     between themes, so the same standard curve changed colour meaning. */
+  --chart-1: oklch(0.66 0.175 48);
+  --chart-2: oklch(0.6 0.115 190);
+  --chart-3: oklch(0.62 0.19 355);
+  --chart-4: oklch(0.62 0.14 275);
+  --chart-5: oklch(0.6 0.13 145);
+
+  --sidebar: oklch(0.962 0.014 84);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: oklch(0.7 0.175 48);
+  --sidebar-primary-foreground: oklch(0.22 0.07 283);
+  --sidebar-accent: oklch(0.93 0.02 84);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: oklch(0.88 0.018 84);
+  --sidebar-ring: oklch(0.7 0.175 48);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --paper: oklch(0.215 0.038 285);
+  --ink: oklch(0.965 0.01 85);
+  --ink-soft: oklch(0.72 0.025 285);
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: oklch(0.26 0.04 285);
+  --card-foreground: var(--ink);
+  --popover: oklch(0.26 0.04 285);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.76 0.16 50);
+  --primary-foreground: oklch(0.2 0.05 285);
+  --secondary: oklch(0.31 0.035 285);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.31 0.035 285);
+  --muted-foreground: var(--ink-soft);
+  --accent: oklch(0.34 0.04 285);
+  --accent-foreground: var(--ink);
+  --destructive: oklch(0.7 0.19 25);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.76 0.16 50);
+
+  --pillar-lnp: oklch(0.76 0.16 50);
+  --pillar-lnp-subtle: oklch(0.34 0.06 55);
+  --pillar-utr: oklch(0.72 0.12 188);
+  --pillar-utr-subtle: oklch(0.32 0.05 188);
+  --pillar-disease: oklch(0.72 0.17 355);
+  --pillar-disease-subtle: oklch(0.33 0.06 355);
+  --accent-utility: oklch(0.74 0.13 275);
+  --accent-utility-subtle: oklch(0.33 0.055 275);
+  --highlight: oklch(0.82 0.15 92);
+
+  --success: oklch(0.72 0.14 155);
+  --success-foreground: oklch(0.2 0.05 155);
+  --success-subtle: oklch(0.31 0.055 155);
+  --warning: oklch(0.79 0.14 75);
+  --warning-foreground: oklch(0.2 0.05 285);
+  --warning-subtle: oklch(0.33 0.055 75);
+  --info: oklch(0.72 0.12 245);
+  --info-foreground: oklch(0.2 0.05 245);
+  --info-subtle: oklch(0.32 0.05 245);
+
+  --chart-1: oklch(0.74 0.175 48);
+  --chart-2: oklch(0.72 0.115 190);
+  --chart-3: oklch(0.72 0.19 355);
+  --chart-4: oklch(0.74 0.14 275);
+  --chart-5: oklch(0.72 0.13 145);
+
+  --sidebar: oklch(0.26 0.04 285);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: oklch(0.76 0.16 50);
+  --sidebar-primary-foreground: oklch(0.2 0.05 285);
+  --sidebar-accent: oklch(0.34 0.04 285);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: oklch(1 0 0 / 14%);
+  --sidebar-ring: oklch(0.76 0.16 50);
 }
 
 @layer base {
@@ -122,5 +229,56 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Sketch surface knobs. `.sketch-card` reads these, so switching a whole
+     subtree to quiet mode is one class on an ancestor. */
+  :root {
+    --sketch-border-width: 2px;
+    --sketch-border-color: var(--ink);
+    --sketch-shadow: 4px 4px 0 var(--ink);
+    --sketch-shadow-hover: 6px 6px 0 var(--ink);
+  }
+
+  /* QUIET MODE — dense scientific UI.
+     Keeps the paper ground and the display face; drops the heavy outline,
+     the hard shadow and the tilt. A 96-column RiboGreen sample grid wearing
+     2px ink borders and offset shadows is unreadable, so everything under
+     /tools/* renders inside this. Do not remove it to "make the tools match
+     the homepage" — the mismatch is deliberate. */
+  .quiet {
+    --sketch-border-width: 1px;
+    --sketch-border-color: var(--border);
+    --sketch-shadow: none;
+    --sketch-shadow-hover: none;
+  }
+}
+
+@layer components {
+  .sketch-card {
+    border: var(--sketch-border-width) solid var(--sketch-border-color);
+    border-radius: var(--radius-xl);
+    background-color: var(--card);
+    box-shadow: var(--sketch-shadow);
+  }
+
+  /* Sticker behaviour: a card that leans and lifts on hover. Transform and
+     shadow only, so it never reflows its neighbours. */
+  .sketch-sticker {
+    transition:
+      transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1),
+      box-shadow 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  .sketch-sticker:hover {
+    transform: translate(-2px, -2px) rotate(-1.2deg);
+    box-shadow: var(--sketch-shadow-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sketch-sticker,
+  .sketch-sticker:hover {
+    transition: none;
+    transform: none;
   }
 }
