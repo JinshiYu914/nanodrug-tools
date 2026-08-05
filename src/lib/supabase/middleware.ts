@@ -33,12 +33,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes: redirect to login if not authenticated
+  // Protected routes: redirect to login if not authenticated.
+  //
+  // This only proves someone is signed in. Anything that needs a stronger
+  // claim — /admin needing an app_admins row, for instance — must re-check
+  // server-side in its own layout; middleware cannot make that decision.
   if (
     !user &&
-    (request.nextUrl.pathname.startsWith("/plasmid") ||
-      request.nextUrl.pathname.startsWith("/dashboard") ||
-      request.nextUrl.pathname.startsWith("/profile"))
+    ["/profile"].some((prefix) => request.nextUrl.pathname.startsWith(prefix))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
