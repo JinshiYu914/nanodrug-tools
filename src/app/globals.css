@@ -188,24 +188,28 @@
   --ring: oklch(0.76 0.16 50);
 
   --pillar-lnp: oklch(0.76 0.16 50);
-  --pillar-lnp-subtle: oklch(0.34 0.06 55);
   --pillar-utr: oklch(0.72 0.12 188);
-  --pillar-utr-subtle: oklch(0.32 0.05 188);
   --pillar-disease: oklch(0.72 0.17 355);
-  --pillar-disease-subtle: oklch(0.33 0.06 355);
   --accent-utility: oklch(0.74 0.13 275);
-  --accent-utility-subtle: oklch(0.33 0.055 275);
   --highlight: oklch(0.82 0.15 92);
+
+  /* Dark `-subtle` values sit just off --card and carry very little chroma.
+     Scaling the light values down instead produces muddy brown/olive panels —
+     a tint at 6% chroma over a dark ground reads as dirt, not as colour. */
+  --pillar-lnp-subtle: oklch(0.272 0.03 55);
+  --pillar-utr-subtle: oklch(0.268 0.028 188);
+  --pillar-disease-subtle: oklch(0.272 0.032 355);
+  --accent-utility-subtle: oklch(0.272 0.032 275);
 
   --success: oklch(0.72 0.14 155);
   --success-foreground: oklch(0.2 0.05 155);
-  --success-subtle: oklch(0.31 0.055 155);
+  --success-subtle: oklch(0.275 0.032 155);
   --warning: oklch(0.79 0.14 75);
   --warning-foreground: oklch(0.2 0.05 285);
-  --warning-subtle: oklch(0.33 0.055 75);
+  --warning-subtle: oklch(0.278 0.032 75);
   --info: oklch(0.72 0.12 245);
   --info-foreground: oklch(0.2 0.05 245);
-  --info-subtle: oklch(0.32 0.05 245);
+  --info-subtle: oklch(0.27 0.03 245);
 
   --chart-1: oklch(0.74 0.175 48);
   --chart-2: oklch(0.72 0.115 190);

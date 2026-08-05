@@ -54,7 +54,7 @@ export function PillarSection({ pillar, index }: { pillar: Pillar; index: number
           <div
             className={cn(
               "sketch-card flex items-center justify-center overflow-hidden p-5",
-              tone.bg
+              tone.panel
             )}
           >
             <Diagram />

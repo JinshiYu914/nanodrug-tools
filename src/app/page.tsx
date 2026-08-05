@@ -25,15 +25,14 @@ export default function Home() {
           className="absolute -right-6 bottom-16 hidden size-28 rotate-6 opacity-70 lg:block"
         />
 
-        <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-16 sm:px-6 sm:pb-24 sm:pt-24 lg:grid-cols-[1.05fr_1fr] lg:items-center">
+        <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-12 pt-16 sm:px-6 sm:pb-16 sm:pt-24 lg:grid-cols-[1.2fr_1fr] lg:items-center">
           <div>
             <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Lipid nanoparticles · mRNA · targeted delivery
             </p>
 
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-              Getting the right message
-              <br className="hidden sm:block" /> into the{" "}
+            <h1 className="mt-5 text-balance font-display text-4xl font-extrabold leading-[1.06] tracking-tight sm:text-5xl lg:text-[3.5rem]">
+              Getting the right message into the{" "}
               <span className="text-pillar-lnp">right cell</span>.
             </h1>
 
@@ -57,7 +56,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="sketch-card bg-pillar-lnp-subtle p-6 sm:p-8">
+          <div className="sketch-card p-6 [--sketch-border-color:var(--pillar-lnp)] sm:p-8">
             <LnpCrossSection />
           </div>
         </div>

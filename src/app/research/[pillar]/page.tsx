@@ -53,8 +53,8 @@ export default async function PillarPage({ params }: Params) {
           </p>
         </header>
 
-        <div className={cn("sketch-card p-6", tone.bg)}>
-          <Diagram />
+        <div className={cn("sketch-card p-6", tone.panel)}>
+          <Diagram className="mx-auto max-w-lg" />
         </div>
       </div>
 

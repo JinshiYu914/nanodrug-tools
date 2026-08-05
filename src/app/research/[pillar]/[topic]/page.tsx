@@ -70,8 +70,10 @@ export default async function TopicPage({ params }: Params) {
         </p>
       </header>
 
-      <div className={cn("sketch-card mt-10 p-6 sm:p-8", tone.bg)}>
-        <Diagram />
+      {/* Capped, because the label type inside the SVG scales with the frame —
+          unbounded it ends up larger than the body copy below it. */}
+      <div className={cn("sketch-card mt-10 p-6 sm:p-8", tone.panel)}>
+        <Diagram className="mx-auto max-w-xl" />
       </div>
 
       <p className="mt-10 text-lg leading-relaxed">{topic.summary}</p>

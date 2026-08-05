@@ -48,7 +48,7 @@ export function LnpCrossSection({ variant = "full", className }: DiagramProps) {
       viewBox="0 0 400 256"
       className={className}
     >
-      <path d={pegs} stroke="currentColor" strokeWidth={STROKE.hair} opacity="0.6" />
+      <path d={pegs} stroke="currentColor" strokeWidth={STROKE.detail} opacity="0.85" />
       <path d={tails} stroke="currentColor" strokeWidth={STROKE.hair} opacity="0.45" />
 
       {/* Outer shell */}

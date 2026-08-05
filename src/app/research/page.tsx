@@ -62,7 +62,7 @@ export default function ResearchIndexPage() {
                     Open programme <ArrowRight className="size-4" />
                   </Link>
                 </div>
-                <div className={cn("sketch-card p-5", tone.bg)}>
+                <div className={cn("sketch-card p-5", tone.panel)}>
                   <Diagram variant="thumb" />
                 </div>
               </div>

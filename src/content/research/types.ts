@@ -31,27 +31,38 @@ export type Pillar = {
   topics: TopicMeta[];
 };
 
-/** Maps a pillar accent onto the CSS tokens, so components never branch on id. */
+/**
+ * Maps a pillar accent onto CSS tokens, so components never branch on id.
+ *
+ * `panel` is for large surfaces — it re-points the .sketch-card border variable
+ * at the pillar colour and leaves the fill as --card. A large tinted fill was
+ * tried first and fails in dark mode: a warm panel at any usable chroma reads
+ * as brown mud against the cool near-black ground. Colour belongs on the
+ * outline, which is also where the reference art puts it.
+ *
+ * `bg` keeps the tint, but only for small surfaces — pills and chips — where
+ * the area is too small for the mud to register.
+ */
 export const ACCENT_CLASS: Record<
   PillarAccent,
-  { text: string; bg: string; border: string; dot: string }
+  { text: string; bg: string; panel: string; dot: string }
 > = {
   lnp: {
     text: "text-pillar-lnp",
     bg: "bg-pillar-lnp-subtle",
-    border: "border-pillar-lnp",
+    panel: "[--sketch-border-color:var(--pillar-lnp)]",
     dot: "bg-pillar-lnp",
   },
   utr: {
     text: "text-pillar-utr",
     bg: "bg-pillar-utr-subtle",
-    border: "border-pillar-utr",
+    panel: "[--sketch-border-color:var(--pillar-utr)]",
     dot: "bg-pillar-utr",
   },
   disease: {
     text: "text-pillar-disease",
     bg: "bg-pillar-disease-subtle",
-    border: "border-pillar-disease",
+    panel: "[--sketch-border-color:var(--pillar-disease)]",
     dot: "bg-pillar-disease",
   },
 };
