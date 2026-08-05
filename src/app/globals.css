@@ -279,10 +279,55 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Orbit map motion.
+ *
+ * The ambient motion lives in the connectors and a pulse behind the core —
+ * never in the arm nodes themselves. Drifting a hit target a few pixels forever
+ * makes it something you have to chase, and these have to be hovered.
+ *
+ * The pulse element is centred with translate(-50%, -50%), so its keyframes
+ * must carry that translate through or it snaps to the corner.
+ * ------------------------------------------------------------------------- */
+@keyframes orbit-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+@keyframes orbit-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0.45;
+  }
+  70%,
+  100% {
+    transform: translate(-50%, -50%) scale(1.45);
+    opacity: 0;
+  }
+}
+
+@layer components {
+  .orbit-link {
+    stroke-dasharray: 7 9;
+    animation: orbit-flow 1.9s linear infinite;
+  }
+  .orbit-pulse {
+    animation: orbit-pulse 3.4s ease-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sketch-sticker,
   .sketch-sticker:hover {
     transition: none;
     transform: none;
+  }
+  .orbit-link,
+  .orbit-pulse {
+    animation: none;
+  }
+  .orbit-pulse {
+    opacity: 0;
   }
 }

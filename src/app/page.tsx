@@ -35,12 +35,9 @@ export default function Home() {
               <span className="text-pillar-lnp">right cell</span>.
             </h1>
 
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
               Most of an LNP dose goes to the liver whether you want it to or
-              not. Three programmes work on that: putting a ligand on the
-              particle so it chooses its own address, rewriting the
-              untranslated ends of the transcript so the sequence decides which
-              cell translates it, and the diseases that open up once both work.
+              not. Three arms of work on that — and on what it makes treatable.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -83,10 +80,9 @@ export default function Home() {
             <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
               Calculators from the bench
             </h2>
-            <p className="mt-2 max-w-xl leading-relaxed text-muted-foreground">
-              The LNP formulation calculator, batch screening and RiboGreen
-              encapsulation workup used in this lab, plus the everyday molarity
-              and dilution maths. Free, no account needed for most of it.
+            <p className="mt-2 max-w-lg leading-relaxed text-muted-foreground">
+              LNP formulation, batch screening, RiboGreen encapsulation — plus
+              the everyday molarity and dilution maths.
             </p>
           </div>
           <Button asChild size="lg" className="shrink-0 gap-2 font-semibold shadow-sticker-sm">
