@@ -48,8 +48,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       {
         href: "/tools/lnp-formula",
         label: "LNP Calculator",
-        blurb:
-          "Size a formulation from N/P ratio and lipid molar ratios, screen batches side by side, and work up RiboGreen encapsulation efficiency.",
+        blurb: "Formulation, batch screening, RiboGreen EE.",
       },
     ],
   },
@@ -60,27 +59,27 @@ export const TOOL_GROUPS: ToolGroup[] = [
       {
         href: "/tools/mol-weight",
         label: "Molecular Weight",
-        blurb: "Parse a chemical formula into a molecular weight and a per-element breakdown.",
+        blurb: "Formula to MW, with element breakdown.",
       },
       {
         href: "/tools/molar-concentration",
         label: "Molar Concentration",
-        blurb: "Solve for mass, concentration, volume or molecular weight from the other three.",
+        blurb: "Mass, concentration, volume — solve for any one.",
       },
       {
         href: "/tools/dilution",
         label: "Dilution",
-        blurb: "C₁V₁ = C₂V₂, plus serial dilution ladders.",
+        blurb: "C₁V₁ = C₂V₂, plus serial ladders.",
       },
       {
         href: "/tools/formulation",
         label: "In-Vivo Formulation",
-        blurb: "Turn a mg/kg dose and an animal count into DMSO, PEG300, Tween-80 and water volumes.",
+        blurb: "mg/kg dose to vehicle volumes.",
       },
       {
         href: "/tools/ligation",
         label: "Ligation",
-        blurb: "Vector-to-insert molar ratios, per-fragment volumes, enzymes and water.",
+        blurb: "Vector:insert ratios and reaction volumes.",
       },
     ],
   },
@@ -93,8 +92,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
   {
     heading: "Research",
     links: [
-      { href: "/", label: "Research interests" },
-      { href: "/research", label: "All topics" },
+      { href: "/#research", label: "Research interests" },
       { href: "/progress", label: "Weekly progress" },
     ],
   },

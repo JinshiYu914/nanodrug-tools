@@ -58,7 +58,7 @@ export default function ProgressPage() {
           every Monday, reviewed before they go public.
         </p>
         <Button asChild variant="outline" className="mt-6 font-semibold">
-          <Link href="/research">Read the research instead</Link>
+          <Link href="/#research">Read the research instead</Link>
         </Button>
       </div>
     </div>

@@ -1,10 +1,10 @@
 import { DiagramFrame, Label, STROKE, type DiagramProps } from "./primitives";
 
 const BRANCHES = [
-  { y: 58, label: "Targeted protein degradation" },
-  { y: 106, label: "Tumour immunotherapy" },
-  { y: 154, label: "Gene editing" },
-  { y: 202, label: "Cell therapy" },
+  { y: 58, label: "in vivo CAR-T · lupus" },
+  { y: 106, label: "PCSK9 editing" },
+  { y: 154, label: "Cytokine therapy" },
+  { y: 202, label: "LYTAC degrader" },
 ] as const;
 
 /**

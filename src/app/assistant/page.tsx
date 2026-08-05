@@ -45,7 +45,7 @@ export default function AssistantPage() {
               <Link href="/tools">Open Lab Tools</Link>
             </Button>
             <Button asChild variant="outline" className="font-semibold">
-              <Link href="/research">Read the research</Link>
+              <Link href="/#research">Read the research</Link>
             </Button>
           </div>
         </div>

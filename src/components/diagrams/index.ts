@@ -3,6 +3,7 @@ import type { DiagramProps } from "./primitives";
 import { LnpCrossSection } from "./lnp-cross-section";
 import { MrnaConstruct } from "./mrna-construct";
 import { DiseaseProgrammes } from "./disease-programmes";
+import { LytacDegrader } from "./lytac-degrader";
 
 /**
  * String-keyed registry.
@@ -15,9 +16,10 @@ export const DIAGRAMS = {
   "lnp-cross-section": LnpCrossSection,
   "mrna-construct": MrnaConstruct,
   "disease-programmes": DiseaseProgrammes,
+  "lytac-degrader": LytacDegrader,
 } satisfies Record<string, ComponentType<DiagramProps>>;
 
 export type DiagramId = keyof typeof DIAGRAMS;
 
-export { LnpCrossSection, MrnaConstruct, DiseaseProgrammes };
+export { LnpCrossSection, MrnaConstruct, DiseaseProgrammes, LytacDegrader };
 export type { DiagramProps };

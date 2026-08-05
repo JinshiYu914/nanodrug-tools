@@ -3,8 +3,7 @@ import { ArrowDown, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LnpCrossSection } from "@/components/diagrams";
 import { Sticker } from "@/components/diagrams/primitives";
-import { PillarSection } from "@/components/research/pillar-section";
-import { PILLARS } from "@/content/research";
+import { ResearchInterests } from "@/components/research/research-interests";
 
 export default function Home() {
   return (
@@ -46,8 +45,8 @@ export default function Home() {
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg" className="gap-2 font-semibold shadow-sticker-sm">
-                <Link href="#lipid-nanoparticle">
-                  Read the research <ArrowRight className="size-4" />
+                <Link href="#research">
+                  Research interests <ArrowRight className="size-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="font-semibold">
@@ -63,20 +62,18 @@ export default function Home() {
 
         <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
           <Link
-            href="#lipid-nanoparticle"
+            href="#research"
             className="inline-flex items-center gap-3 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
             <span className="flex size-9 items-center justify-center rounded-full border-2 border-ink/25">
               <ArrowDown className="size-4" />
             </span>
-            Three programmes
+            Research interests
           </Link>
         </div>
       </section>
 
-      {PILLARS.map((pillar, index) => (
-        <PillarSection key={pillar.id} pillar={pillar} index={index} />
-      ))}
+      <ResearchInterests />
 
       {/* Bench tools — deliberately last. They support the research; they are
           not what the site is about. */}
