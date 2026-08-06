@@ -20,6 +20,7 @@ import { moduleFilled } from "@/lib/calculations/tlnp-experiment";
 import BatchSidebar from "./batch-sidebar";
 import ModuleNav, { type ModuleKey } from "./module-nav";
 import ModulePrep from "./module-prep";
+import ModuleConjugation from "./module-conjugation";
 import { useTlnpBatch } from "./use-tlnp-batch";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
@@ -226,6 +227,8 @@ export default function TlnpWorkbench() {
                   createdAt={batch.created_at}
                   updatedAt={batch.updated_at}
                 />
+              ) : moduleParam === "2" ? (
+                <ModuleConjugation data={data} update={update} />
               ) : (
                 <ModulePlaceholder module={moduleParam} />
               )}
