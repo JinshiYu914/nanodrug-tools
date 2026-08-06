@@ -35,8 +35,8 @@ export default function ChangelogPage() {
           更新日志
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-          从上线那天起，站点的每一次版本改动都记在这里，最新的在最上面。
-          当前版本 <span className="font-mono font-semibold text-foreground">
+          当前版本{" "}
+          <span className="font-mono font-semibold text-foreground">
             {CHANGELOG[0]?.version}
           </span>
           。

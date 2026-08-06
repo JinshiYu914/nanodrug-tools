@@ -108,7 +108,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
     heading: "About",
     links: [
       { href: "/contact", label: "Contact" },
-      { href: "/changelog", label: "更新日志 · Changelog" },
+      { href: "/changelog", label: "Changelog" },
       { href: "/login", label: "Sign in" },
     ],
   },
