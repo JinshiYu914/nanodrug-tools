@@ -50,6 +50,11 @@ export const TOOL_GROUPS: ToolGroup[] = [
         label: "LNP Calculator",
         blurb: "Formulation, batch screening, RiboGreen EE.",
       },
+      {
+        href: "/tools/tlnp",
+        label: "tLNP Workbench",
+        blurb: "Record a targeted-LNP batch end to end, then compare batches.",
+      },
     ],
   },
   {
@@ -101,6 +106,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
     links: [
       { href: "/tools", label: "Lab Tools" },
       { href: "/tools/lnp-formula", label: "LNP Calculator" },
+      { href: "/tools/tlnp", label: "tLNP Workbench" },
       { href: "/assistant", label: "AI Assistant" },
     ],
   },
