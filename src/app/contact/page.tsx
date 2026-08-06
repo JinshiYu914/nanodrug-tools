@@ -106,8 +106,8 @@ export default function ContactPage() {
       <div className="flex min-h-[80vh] items-center justify-center px-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-success-subtle">
+              <CheckCircle2 className="h-6 w-6 text-success" />
             </div>
             <CardTitle>提交成功</CardTitle>
             <CardDescription>
@@ -246,7 +246,7 @@ export default function ContactPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-start gap-3">
-                <MessageCircle className="mt-0.5 h-5 w-5 text-green-500" />
+                <MessageCircle className="mt-0.5 h-5 w-5 text-success" />
                 <div>
                   <p className="text-sm font-medium">微信</p>
                   <Badge variant="secondary" className="mt-1">
@@ -256,7 +256,7 @@ export default function ContactPage() {
               </div>
               <Separator />
               <div className="flex items-start gap-3">
-                <Mail className="mt-0.5 h-5 w-5 text-blue-500" />
+                <Mail className="mt-0.5 h-5 w-5 text-info" />
                 <div>
                   <p className="text-sm font-medium">邮箱</p>
                   <a

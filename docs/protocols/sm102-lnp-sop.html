@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SM102 手包 LNP 制备 SOP</title>
+<style>
+:root{
+  --bg:#ffffff; --panel:#f6f7f8; --panel-2:#eef1f3;
+  --ink:#1b2227; --ink-2:#586269; --ink-3:#8a949b;
+  --line:#e3e7ea; --line-2:#d2d8dc;
+  --accent:#0f6b73; --warn:#a8442c;
+  --font:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#12161a; --panel:#191f24; --panel-2:#212a30;
+    --ink:#e6ebee; --ink-2:#9aa5ac; --ink-3:#6c767d;
+    --line:#262e34; --line-2:#333d44;
+    --accent:#41abb3; --warn:#df7a63;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#ffffff; --panel:#f6f7f8; --panel-2:#eef1f3;
+  --ink:#1b2227; --ink-2:#586269; --ink-3:#8a949b;
+  --line:#e3e7ea; --line-2:#d2d8dc; --accent:#0f6b73; --warn:#a8442c;
+}
+:root[data-theme="dark"]{
+  --bg:#12161a; --panel:#191f24; --panel-2:#212a30;
+  --ink:#e6ebee; --ink-2:#9aa5ac; --ink-3:#6c767d;
+  --line:#262e34; --line-2:#333d44; --accent:#41abb3; --warn:#df7a63;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; scroll-padding-top:64px; }
+@media (prefers-reduced-motion:reduce){ html{ scroll-behavior:auto; } }
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--font); font-size:15.5px; line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+a{ color:var(--accent); text-underline-offset:2px; }
+h1,h2,h3{ line-height:1.3; margin:0; }
+.mono,.q{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.q{ font-weight:600; white-space:nowrap; }
+
+/* header */
+.top{ position:sticky; top:0; z-index:20; background:color-mix(in srgb,var(--bg) 90%,transparent);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }
+.top__in{ max-width:840px; margin:0 auto; padding:9px 24px; display:flex; align-items:center; gap:12px; }
+.top__t{ font-size:13px; font-weight:600; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.top__tag{ font-family:var(--mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em; }
+.top__sp{ flex:1; }
+.btn{ display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 10px;
+  border:1px solid var(--line-2); border-radius:7px; background:var(--bg); color:var(--ink-2);
+  font-family:inherit; font-size:12.5px; cursor:pointer; }
+.btn:hover{ border-color:var(--accent); color:var(--accent); }
+.btn svg{ width:14px; height:14px; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+
+/* doc */
+.doc{ max-width:840px; margin:0 auto; padding:34px 24px 80px; }
+.eyebrow{ font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; color:var(--accent); text-transform:uppercase; }
+h1{ font-size:1.7rem; font-weight:700; letter-spacing:-.01em; margin:8px 0 10px; }
+.lead{ color:var(--ink-2); font-size:15px; max-width:62ch; }
+
+/* key facts */
+.facts{ display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--line);
+  border-radius:9px; margin:20px 0 6px; overflow:hidden; }
+.fact{ padding:11px 14px; border-right:1px solid var(--line); }
+.fact:last-child{ border-right:0; }
+.fact__v{ font-family:var(--mono); font-weight:700; font-size:16px; }
+.fact__l{ font-size:11.5px; color:var(--ink-3); margin-top:1px; }
+
+/* toc */
+.toc{ margin:22px 0 4px; padding:12px 16px; background:var(--panel); border:1px solid var(--line); border-radius:9px; }
+.toc__h{ font-size:11px; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); margin-bottom:7px; }
+.toc__list{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:3px 18px; }
+.toc__list a{ color:var(--ink-2); text-decoration:none; font-size:13.5px; }
+.toc__list a:hover{ color:var(--accent); }
+.toc__list .n{ font-family:var(--mono); color:var(--ink-3); font-size:11.5px; margin-right:5px; }
+
+/* sections */
+section{ margin-top:34px; scroll-margin-top:60px; }
+h2{ font-size:1.18rem; font-weight:700; padding-bottom:8px; border-bottom:2px solid var(--line);
+  display:flex; align-items:baseline; gap:10px; }
+h2 .num{ font-family:var(--mono); font-size:.85em; color:var(--accent); font-weight:700; }
+h2 .opt{ font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ink-3);
+  border:1px solid var(--line-2); border-radius:4px; padding:1px 6px; margin-left:auto; letter-spacing:.04em; }
+h3{ font-size:13.5px; font-weight:700; color:var(--ink); margin:18px 0 8px; }
+p{ margin:0 0 10px; }
+.muted{ color:var(--ink-2); }
+
+/* ordered steps */
+ol.steps{ margin:0; padding:0; list-style:none; counter-reset:s; }
+ol.steps>li{ counter-increment:s; position:relative; padding:0 0 9px 30px; color:var(--ink); font-size:14.5px; }
+ol.steps>li::before{ content:counter(s); position:absolute; left:0; top:1px; width:21px; height:21px;
+  border-radius:5px; background:var(--panel-2); color:var(--ink-2); font-family:var(--mono);
+  font-size:11.5px; font-weight:700; display:grid; place-items:center; }
+
+/* plain bullet list */
+ul.list{ margin:0; padding:0; list-style:none; }
+ul.list>li{ position:relative; padding:0 0 7px 16px; font-size:14.5px; color:var(--ink); }
+ul.list>li::before{ content:""; position:absolute; left:2px; top:11px; width:4px; height:4px; border-radius:50%; background:var(--ink-3); }
+
+/* note */
+.note{ border-left:3px solid var(--warn); background:var(--panel); padding:9px 14px; border-radius:0 7px 7px 0;
+  margin:12px 0; font-size:13.5px; color:var(--ink-2); }
+.note b{ color:var(--warn); }
+.note--info{ border-left-color:var(--accent); }
+.note--info b{ color:var(--accent); }
+
+/* tables */
+.tw{ overflow-x:auto; margin:12px 0; border:1px solid var(--line); border-radius:9px; }
+table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+th,td{ text-align:left; padding:9px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+thead th{ background:var(--panel); color:var(--ink-3); font-family:var(--mono); font-weight:700;
+  font-size:11px; letter-spacing:.05em; text-transform:uppercase; }
+tbody tr:last-child td{ border-bottom:0; }
+td.k{ font-weight:600; white-space:nowrap; }
+td .q{ color:var(--ink); }
+.rec{ font-family:var(--mono); font-size:10px; color:var(--accent); margin-left:6px; }
+
+/* formula */
+.eq{ font-family:var(--mono); font-size:14px; font-weight:600; background:var(--panel);
+  border:1px dashed var(--line-2); border-radius:8px; padding:11px 14px; margin:12px 0; text-align:center; }
+
+/* pipetting schematic — flat, single tone */
+.schem{ float:right; width:150px; margin:0 0 8px 18px; }
+.schem svg{ display:block; width:100%; height:auto; color:var(--ink-3); }
+.schem figcaption{ font-family:var(--mono); font-size:10.5px; color:var(--ink-3); text-align:center; margin-top:4px; }
+
+/* footer */
+footer{ border-top:1px solid var(--line); margin-top:12px; }
+.foot{ max-width:840px; margin:0 auto; padding:22px 24px 40px; display:flex; flex-wrap:wrap;
+  gap:12px 20px; align-items:center; justify-content:space-between; font-size:12.5px; color:var(--ink-3); }
+.foot b{ color:var(--ink-2); }
+.foot a{ font-weight:600; }
+
+@media (max-width:560px){
+  .facts{ grid-template-columns:repeat(2,1fr); }
+  .fact:nth-child(2){ border-right:0; }
+  .fact:nth-child(1),.fact:nth-child(2){ border-bottom:1px solid var(--line); }
+  .schem{ float:none; margin:10px auto; }
+}
+@media print{
+  .top,.btn{ display:none !important; }
+  body{ font-size:11pt; color:#000; background:#fff; }
+  section,.tw,.note,.facts{ break-inside:avoid; }
+  a{ color:#000; text-decoration:none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top__in">
+    <span class="top__t">SM102 手包 LNP 制备 SOP</span>
+    <span class="top__tag">v1.0</span>
+    <span class="top__sp"></span>
+    <button class="btn" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>打印</button>
+    <button class="btn" id="themeBtn" aria-label="切换深浅色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+  </div>
+</header>
+
+<main class="doc">
+  <p class="eyebrow">标准操作规程 · SOP-LNP-SM102</p>
+  <h1>手动吹打法制备 SM102 脂质纳米颗粒（LNP）</h1>
+  <p class="lead">将溶于无水乙醇的脂质相快速打入含 RNA 的水相，匀速吹打混合，自组装为包裹核酸的 LNP。适用于小试手包（单次 ≤300 µL、≤15 µg RNA）。与 LNP Calculator 配套：计算器算体积，本 SOP 定操作。</p>
+
+  <div class="facts">
+    <div class="fact"><div class="fact__v">~90%</div><div class="fact__l">包封率 EE</div></div>
+    <div class="fact"><div class="fact__v">~110nm</div><div class="fact__l">粒径</div></div>
+    <div class="fact"><div class="fact__v">&gt;50%</div><div class="fact__l">得率</div></div>
+    <div class="fact"><div class="fact__v">20–30</div><div class="fact__l">透析后 ng/µL</div></div>
+  </div>
+
+  <nav class="toc">
+    <div class="toc__h">目录</div>
+    <ul class="toc__list">
+      <li><a href="#materials"><span class="n">M</span>试剂与耗材</a></li>
+      <li><a href="#notes"><span class="n">!</span>关键注意事项</a></li>
+      <li><a href="#s1"><span class="n">1</span>试剂准备</a></li>
+      <li><a href="#s2"><span class="n">2</span>LNP 制备</a></li>
+      <li><a href="#s3"><span class="n">3</span>溶剂置换</a></li>
+      <li><a href="#s4"><span class="n">4</span>浓度检测</a></li>
+      <li><a href="#s5"><span class="n">5</span>DLS</a></li>
+      <li><a href="#s6"><span class="n">6</span>TEM</a></li>
+      <li><a href="#ref"><span class="n">#</span>参数速查</a></li>
+    </ul>
+  </nav>
+
+  <!-- Materials -->
+  <section id="materials">
+    <h2><span class="num">M</span>试剂与耗材</h2>
+    <h3>脂质母液（均溶于无水乙醇）</h3>
+    <div class="tw"><table>
+      <thead><tr><th>试剂</th><th>浓度</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td class="k">SM102</td><td><span class="q">50 mg/mL</span></td><td class="muted">可电离阳离子脂质</td></tr>
+        <tr><td class="k">胆固醇 Cholesterol</td><td><span class="q">10 mg/mL</span></td><td class="muted">易析出结晶，溶解慢——务必确认无结晶</td></tr>
+        <tr><td class="k">DSPC</td><td><span class="q">10 mg/mL</span></td><td class="muted">辅助磷脂</td></tr>
+        <tr><td class="k">DMG-PEG</td><td><span class="q">10 mg/mL</span></td><td class="muted">PEG 化脂质</td></tr>
+      </tbody>
+    </table></div>
+    <h3>其他试剂与耗材</h3>
+    <ul class="list">
+      <li>RNA、酸性缓冲液（配水相）、无水乙醇（脂相溶剂）、PBS（透析外液）</li>
+      <li>1% Triton-TE、TE 缓冲液、RiboGreen（TE 稀释 1000×）、luc RNA 标准品（<span class="q">10–20 ng/µL</span>）、负染液（过 0.45 µm）</li>
+      <li>200 µL 移液枪、涡旋仪、迷你离心机、30–100 kDa 超滤管、3 mL 透析管、50 mL 离心管、96 孔黑色透底板、荧光酶标仪、TEM 载网</li>
+    </ul>
+  </section>
+
+  <!-- Critical notes -->
+  <section id="notes">
+    <h2><span class="num">!</span>关键注意事项</h2>
+    <ul class="list">
+      <li><b>充分溶解</b>：试剂 <span class="q">-20 °C</span> 取出后涡旋，室温放置 <span class="q">≥20 min</span>。胆固醇易析出细小晶体、溶解缓慢，务必目视确认无结晶后方可使用。</li>
+      <li><b>乙醇挥发快</b>：开盖前<b>瞬离</b>；盖子现开先取、取完立即盖回；分装每管 <span class="q">≥500 µL</span>（量少更易受挥发影响）。</li>
+      <li><b>核对浓度</b>：每次使用前逐管核对各试剂实际浓度。</li>
+      <li><b>定容法配母液</b>：单次配置 <span class="q">≥50 mg</span>、分装 <span class="q">≥500 µL/管</span>；油状或 ≤50 mg 小包装建议整管配置，损失更小。</li>
+    </ul>
+  </section>
+
+  <!-- Step 1 -->
+  <section id="s1">
+    <h2><span class="num">1</span>试剂准备</h2>
+    <ol class="steps">
+      <li>四种脂质母液从 <span class="q">-20 °C</span> 取出，涡旋混匀。</li>
+      <li>室温静置 <span class="q">≥20 min</span> 充分溶解；<b>目视确认胆固醇无结晶</b>。</li>
+      <li>开盖前<b>瞬离</b>；逐管核对浓度后取用，取完立即盖回。</li>
+    </ol>
+  </section>
+
+  <!-- Step 2 -->
+  <section id="s2">
+    <h2><span class="num">2</span>LNP 制备（吹打混合）</h2>
+    <figure class="schem">
+      <svg viewBox="0 0 120 150" fill="none" stroke="currentColor" stroke-width="1.6" aria-label="吹打示意：枪头距管底 2–5mm">
+        <rect x="52" y="4" width="16" height="30" rx="2"/>
+        <path d="M53 34 L67 34 L63 84 L57 84 Z"/>
+        <path d="M30 60 L90 60 L90 96 Q90 132 60 132 Q30 132 30 96 Z"/>
+        <line x1="30" y1="78" x2="90" y2="78" stroke-dasharray="3 3" opacity=".6"/>
+        <line x1="60" y1="118" x2="60" y2="128" stroke="var(--warn)"/>
+        <line x1="53" y1="128" x2="67" y2="128" stroke="var(--warn)"/>
+        <text x="72" y="126" font-family="var(--mono)" font-size="9" fill="var(--warn)" stroke="none">2–5mm</text>
+      </svg>
+      <figcaption>枪头距底 2–5 mm</figcaption>
+    </figure>
+    <h3>取样</h3>
+    <ul class="list">
+      <li>单配方可现配脂相或用先前母液；<b>每次吸取 <span class="q">&gt;10 µL</span></b>，避免体积误差。</li>
+      <li>配方筛选时按配方单独配置，<b>每种制备 <span class="q">≥30 µg</span></b>。</li>
+    </ul>
+    <h3>吹打</h3>
+    <ol class="steps">
+      <li>选合适量程移液枪（总体积 <span class="q">200–300 µL</span> 用 <span class="q">200 µL</span> 枪），<b>调到最大量程</b>。</li>
+      <li>吸取所需体积脂相，<b>快速打入水相</b>。</li>
+      <li>枪头插至<b>距管底 <span class="q">2–5 mm</span></b>，全程最大量程<b>匀速吹打 <span class="q">≥60 次</span></b>，避免吹入气泡。</li>
+    </ol>
+    <div class="note note--info"><b>单次规模</b>　每次吹打 ≤300 µL；建议每次 ≤15 µg（10 mM 脂相）、总体积 220–250 µL，可得约 90% 包封率、~110 nm 粒径。</div>
+  </section>
+
+  <!-- Step 3 -->
+  <section id="s3">
+    <h2><span class="num">3</span>溶剂置换（除乙醇，换 PBS）</h2>
+    <div class="tw"><table>
+      <thead><tr><th>方案</th><th>透析<span class="rec">推荐 · 得率高</span></th><th>超滤</th></tr></thead>
+      <tbody>
+        <tr><td class="k">器材</td><td>3 mL 透析管 + 50 mL 管（<span class="q">~37 mL PBS</span>）</td><td>30–100 kDa 超滤管</td></tr>
+        <tr><td class="k">条件</td><td>4 °C 摇床 <span class="q">2 h ×1–2</span></td><td><span class="q">500–2000 g</span>、10 min（尽量小离心力）</td></tr>
+        <tr><td class="k">体积 / 适用</td><td>单次 <span class="q">100 µL–3 mL</span>；得率高</td><td>RNA <span class="q">&lt;50 µg</span> 不建议（损失极大）</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note"><b>注意</b>　透析管每次用前、用后均须充分用水清洗。</div>
+  </section>
+
+  <!-- Step 4 -->
+  <section id="s4">
+    <h2><span class="num">4</span>浓度检测（RiboGreen）</h2>
+    <p class="muted">96 孔黑色透底板，同一样品设两孔：Triton 孔裂解 LNP 测总 RNA，TE 孔保持颗粒完整测游离 RNA。</p>
+    <div class="tw"><table>
+      <thead><tr><th>孔</th><th>加入</th><th>测定</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Triton 孔</td><td><span class="q">98 µL 1% Triton-TE</span> + <span class="q">2 µL</span> LNP</td><td>总 RNA（颗粒裂解）</td></tr>
+        <tr><td class="k">TE 孔</td><td><span class="q">98 µL TE</span> + <span class="q">2 µL</span> LNP</td><td>游离 RNA（颗粒完整）</td></tr>
+      </tbody>
+    </table></div>
+    <ol class="steps">
+      <li>各孔加 RiboGreen（TE 稀释 <span class="q">1000×</span>）<span class="q">100 µL</span>。</li>
+      <li>荧光酶标仪读数：<span class="q">Ex 480 / Em 520</span>，<span class="q">gain 80</span>。</li>
+      <li>每次同测已知浓度 luc RNA 标准品（<span class="q">10–20 ng/µL</span>）校正，按已建标曲计算浓度。</li>
+    </ol>
+    <div class="eq">包封率 EE% = ( 总 RNA − 游离 RNA ) / 总 RNA × 100%</div>
+    <div class="note note--info"><b>预期</b>　透析后 RNA 20–30 ng/µL，得率 &gt;50%，包封率 ~90%。</div>
+  </section>
+
+  <!-- Step 5 -->
+  <section id="s5">
+    <h2><span class="num">5</span>DLS 粒径测定<span class="opt">可选</span></h2>
+    <ol class="steps">
+      <li>取 <span class="q">2–5 µL</span> LNP 加入 <span class="q">1 mL</span> 水中，混匀。</li>
+      <li>转入比色皿测定粒径与分布（PDI）。手包典型粒径 <span class="q">~110 nm</span>。</li>
+    </ol>
+  </section>
+
+  <!-- Step 6 -->
+  <section id="s6">
+    <h2><span class="num">6</span>TEM 负染制样<span class="opt">可选</span></h2>
+    <ol class="steps">
+      <li>LNP 与负染液均先<b>过 0.45 µm 膜</b>。</li>
+      <li><span class="q">3 µL</span> LNP 滴加到载网上，静置 <span class="q">2 min</span>，吸干。</li>
+      <li>加 <span class="q">3 µL</span> 负染液，静置 <span class="q">2 min</span>，吸干。</li>
+      <li>晾干 <span class="q">≥1 h</span> 后拍摄。</li>
+    </ol>
+  </section>
+
+  <!-- Quick reference -->
+  <section id="ref">
+    <h2><span class="num">#</span>参数速查</h2>
+    <div class="tw"><table>
+      <tbody>
+        <tr><td class="k">单次规模</td><td>≤300 µL / 建议 ≤15 µg RNA / 总体积 220–250 µL</td></tr>
+        <tr><td class="k">脂相浓度</td><td>~10 mM</td></tr>
+        <tr><td class="k">吹打</td><td>200 µL 枪，最大量程，距底 2–5 mm，匀速 ≥60 次</td></tr>
+        <tr><td class="k">透析</td><td>3 mL 透析管 + ~37 mL PBS，4 °C 摇床 2 h ×1–2</td></tr>
+        <tr><td class="k">超滤</td><td>30–100 kDa，500–2000 g×10 min；RNA &lt;50 µg 不用</td></tr>
+        <tr><td class="k">RiboGreen</td><td>98 µL Triton-TE / TE + 2 µL LNP + 100 µL 染料；Ex480/Em520，gain 80</td></tr>
+        <tr><td class="k">预期结果</td><td>EE ~90% · 粒径 ~110 nm · 得率 &gt;50% · 透析后 RNA 20–30 ng/µL</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot">
+    <span><b>SOP-LNP-SM102 · v1.0</b>　手动吹打法 · 小试规模</span>
+    <a href="/tools/lnp-formula">← 前往 LNP Calculator</a>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var root=document.documentElement, KEY="sm102-sop-theme", mq=window.matchMedia("(prefers-color-scheme: dark)");
+  try{ var s=localStorage.getItem(KEY); if(s) root.setAttribute("data-theme",s); }catch(e){}
+  document.getElementById("themeBtn").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme")|| (mq.matches?"dark":"light");
+    var next=cur==="dark"?"light":"dark";
+    root.setAttribute("data-theme",next);
+    try{ localStorage.setItem(KEY,next); }catch(e){}
+  });
+  document.getElementById("printBtn").addEventListener("click",function(){ window.print(); });
+})();
+</script>
+</body>
+</html>

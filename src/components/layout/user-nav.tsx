@@ -26,7 +26,7 @@ export function UserNav() {
     return (
       <Link href="/login" className="hidden md:block">
         <Button variant="outline" size="sm">
-          登录
+          Sign in
         </Button>
       </Link>
     );
@@ -65,19 +65,19 @@ export function UserNav() {
         <DropdownMenuItem asChild className="cursor-pointer">
           <Link href="/profile">
             <Settings className="mr-2 h-4 w-4" />
-            <span>个人信息</span>
+            <span>Profile</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
           <Link href="/contact">
             <MessageSquare className="mr-2 h-4 w-4" />
-            <span>联系我们</span>
+            <span>Contact</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
-          <span>退出登录</span>
+          <span>Sign out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -323,7 +323,7 @@ export default function LnpFormulaPage() {
                   className="gap-2"
                 >
                   {copied ? (
-                    <CheckCheck className="h-4 w-4 text-green-600" />
+                    <CheckCheck className="h-4 w-4 text-success" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}

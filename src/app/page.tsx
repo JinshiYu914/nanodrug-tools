@@ -1,129 +1,83 @@
 import Link from "next/link";
-import {
-  FlaskConical,
-  Wrench,
-  TestTubes,
-  Dna,
-  BookOpen,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-
-const tools = [
-  {
-    title: "Lab Toolbox",
-    description:
-      "分子量计算、摩尔浓度、稀释计算、动物体内配方、同源重组连接等实验室常用计算器。",
-    icon: Wrench,
-    href: "/tools",
-    badge: "Free",
-  },
-  {
-    title: "LNP Formulation Calculator",
-    description:
-      "基于 N/P 比和脂质摩尔比计算 LNP 各组分用量，支持自定义配方参数。",
-    icon: TestTubes,
-    href: "/tools/lnp-formula",
-    badge: "Free",
-  },
-  {
-    title: "Plasmid Manager",
-    description:
-      "保存和管理质粒序列，支持搜索、编辑和序列可视化查看。",
-    icon: Dna,
-    href: "/plasmid",
-    badge: "Login Required",
-  },
-  {
-    title: "Research",
-    description:
-      "LNP递送系统驱动下的mRNA疗法演进——从药物对比到核心设计、临床应用和前沿挑战。",
-    icon: BookOpen,
-    href: "/research",
-    badge: "Free",
-  },
-];
+import { Sticker } from "@/components/diagrams/primitives";
+import { ResearchInterests } from "@/components/research/research-interests";
 
 export default function Home() {
   return (
     <div className="flex flex-col">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden border-b">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-8 px-4 py-24 text-center sm:px-6 sm:py-32">
-          <div className="flex items-center gap-2 rounded-full border bg-muted/50 px-4 py-1.5 text-sm text-muted-foreground">
-            <FlaskConical className="h-4 w-4" />
-            Open-source tools for nano drug delivery research
-          </div>
+      {/* ---------------------------------------------------------------
+       * Hero. The headline states the problem; the route immediately below
+       * is the answer, so there is no illustration here — the particle is
+       * station 01 and drawing it twice would halve the impact of both.
+       * ------------------------------------------------------------- */}
+      <section className="relative overflow-hidden">
+        {/* Marginalia. xl only — below that the container reaches the viewport
+            edge and these land on top of the copy. */}
+        <Sticker
+          shape="arc"
+          tone="var(--pillar-utr)"
+          className="absolute -left-12 top-24 hidden size-32 -rotate-12 opacity-70 xl:block"
+        />
+        <Sticker
+          shape="coil"
+          tone="var(--pillar-disease)"
+          className="absolute -right-10 top-44 hidden size-28 rotate-6 opacity-70 xl:block"
+        />
 
-          <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            Tools for{" "}
-            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-cyan-300">
-              Nano Drug Delivery
-            </span>{" "}
-            Research
-          </h1>
-
-          <p className="max-w-2xl text-lg text-muted-foreground sm:text-xl">
-            A suite of online calculators and utilities designed for
-            researchers working with lipid nanoparticles, mRNA delivery systems,
-            and nanomedicine.
+        <div className="mx-auto max-w-6xl px-4 pb-4 pt-16 sm:px-6 sm:pt-20">
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Research interests
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/tools">
-              <Button size="lg" className="gap-2">
-                Get Started <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/research">
-              <Button variant="outline" size="lg">
-                Browse Research
-              </Button>
-            </Link>
+          <div className="mt-5 grid gap-8 lg:grid-cols-[1.35fr_1fr] lg:items-end">
+            <h1 className="max-w-3xl text-balance font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.75rem]">
+              Getting the right message into the{" "}
+              <span className="text-pillar-lnp">right cell</span>.
+            </h1>
+
+            <div className="lg:pb-2">
+              <p className="max-w-md leading-relaxed text-muted-foreground">
+                Most of an intravenous LNP dose goes to the liver whether you
+                want it to or not. Three stages of work on that — and on what it
+                makes treatable.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button asChild className="gap-2 font-semibold shadow-sticker-sm">
+                  <Link href="/progress">
+                    Research progress <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="font-semibold">
+                  <Link href="/tools">Open Lab Tools</Link>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-100/40 via-transparent to-transparent dark:from-blue-900/20" />
       </section>
 
-      {/* Tools Grid */}
-      <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">Online Tools</h2>
-          <p className="mt-3 text-muted-foreground">
-            Free calculators and utilities for your daily research workflow
-          </p>
-        </div>
+      <ResearchInterests />
 
-        <div className="grid gap-6 sm:grid-cols-2">
-          {tools.map((tool) => (
-            <Link key={tool.href} href={tool.href} className="group">
-              <Card className="h-full transition-shadow hover:shadow-lg">
-                <CardHeader>
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <tool.icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      {tool.badge}
-                    </span>
-                  </div>
-                  <CardTitle className="group-hover:text-primary transition-colors">
-                    {tool.title}
-                  </CardTitle>
-                  <CardDescription className="text-sm leading-relaxed">
-                    {tool.description}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+      {/* Bench tools — deliberately last. They support the research; they are
+          not what the site is about. */}
+      <section className="border-t border-ink/12 bg-secondary/40 py-16 sm:py-20">
+        <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+              Calculators from the bench
+            </h2>
+            <p className="mt-2 max-w-lg leading-relaxed text-muted-foreground">
+              LNP formulation, batch screening, RiboGreen encapsulation — plus
+              the everyday molarity and dilution maths.
+            </p>
+          </div>
+          <Button asChild size="lg" className="shrink-0 gap-2 font-semibold shadow-sticker-sm">
+            <Link href="/tools">
+              Open Lab Tools <ArrowRight className="size-4" />
             </Link>
-          ))}
+          </Button>
         </div>
       </section>
     </div>

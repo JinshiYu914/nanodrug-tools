@@ -319,7 +319,7 @@ export default function FormulationWorkspace({
                 className={
                   Math.abs(ratioSum - 100) > 0.1
                     ? "text-destructive font-medium"
-                    : "text-green-600 dark:text-green-400 font-medium"
+                    : "text-success font-medium"
                 }
               >
                 {ratioSum.toFixed(1)}%
@@ -418,9 +418,9 @@ export default function FormulationWorkspace({
 
             {/* Total concentration & success */}
             {totalConc && (
-              <div className="rounded-lg border border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20 p-4 space-y-2">
+              <div className="rounded-lg border border-success/35 bg-success-subtle p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <Check className="h-4 w-4 text-success shrink-0" />
                   <span>Lipid Mix 总浓度：</span>
                   <span className="font-mono font-semibold">
                     {totalConc.mM >= 1
@@ -432,7 +432,7 @@ export default function FormulationWorkspace({
                   </span>
                 </div>
                 {stockVolumes && (
-                  <p className="text-xs text-green-700 dark:text-green-400">
+                  <p className="text-xs text-success">
                     请按上方组分彻底恢复室温溶解，吸取对应体积配置脂质混合物，混合均匀后可立即使用或 -20℃短期保存。
                   </p>
                 )}
@@ -558,7 +558,7 @@ export default function FormulationWorkspace({
                 )}
 
                 {!ionizableEntry && (
-                  <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <div className="rounded-md border border-warning/35 bg-warning-subtle p-3 text-xs text-warning flex items-center gap-2">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     未添加可电离脂质，N/P 计算不可用
                   </div>
@@ -632,7 +632,7 @@ export default function FormulationWorkspace({
                 </div>
 
                 {hasAnyPrepResult(prepVolumes) && (
-                  <div className="rounded-md border border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20 p-3 text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                  <div className="rounded-md border border-success/35 bg-success-subtle p-3 text-sm text-success flex items-center gap-2">
                     <Check className="h-4 w-4 shrink-0" />
                     请按照以下体积配置水相和脂相。
                   </div>
@@ -642,7 +642,7 @@ export default function FormulationWorkspace({
                   {/* Aqueous */}
                   <div className="rounded-lg border p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
+                      <div className="h-2 w-2 rounded-full bg-pillar-utr" />
                       <h4 className="text-sm font-semibold">水相 Aqueous</h4>
                     </div>
                     <div className="space-y-2 text-sm">
@@ -675,7 +675,7 @@ export default function FormulationWorkspace({
                   {/* Organic */}
                   <div className="rounded-lg border p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-amber-500" />
+                      <div className="h-2 w-2 rounded-full bg-pillar-lnp" />
                       <h4 className="text-sm font-semibold">脂相 Organic</h4>
                     </div>
                     <div className="space-y-2 text-sm">

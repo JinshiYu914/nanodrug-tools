@@ -358,7 +358,7 @@ export default function ScreeningMode() {
                         保存中
                       </span>
                     ) : lastSavedAt ? (
-                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <span className="flex items-center gap-1 text-success">
                         <Save className="h-3 w-3" />
                         已保存 {formatTime(lastSavedAt)}
                       </span>
