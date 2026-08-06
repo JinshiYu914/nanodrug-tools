@@ -6,8 +6,21 @@ import {
   Text,
   View,
   StyleSheet,
+  Svg,
+  Line,
+  Path,
+  Rect,
+  Text as SvgText,
   pdf,
 } from "@react-pdf/renderer";
+import {
+  buildChromatogramPaths,
+  channelPeaks,
+  chromatogramDomain,
+  type PlotBox,
+} from "@/lib/calculations/chromatogram";
+import { fmtTick, ticksOf } from "@/lib/calculations/chart-scale";
+import type { Chromatogram } from "@/lib/calculations/tlnp-experiment";
 import { describeMethod } from "@/lib/calculations/lnp-bench";
 import { formatVolume } from "@/lib/calculations/lnp-formula";
 import { computeBenchFormulation } from "@/lib/calculations/lnp-bench";
@@ -86,10 +99,195 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   empty: { fontSize: 7.5, color: "#888", marginTop: 2 },
+  figureTitle: { fontSize: 8.5, fontWeight: 700, marginTop: 6, marginBottom: 2 },
+  axisRow: { marginTop: 1 },
+  axisNote: { fontSize: 6.5, color: "#777" },
+  legendRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 2 },
+  legendItem: { flexDirection: "row", alignItems: "center", marginRight: 10 },
+  legendSwatch: { width: 6, height: 6, borderRadius: 3, marginRight: 3 },
+  legendText: { fontSize: 7 },
 });
 
 const n = (v: number | null, digits = 1): string =>
   v === null || !isFinite(v) ? "--" : v.toFixed(digits);
+
+// ─── Chromatogram ─────────────────────────────────────────
+//
+// The page has no CSS custom properties, so the on-screen chart's token-based
+// colours can't come along. These are the print equivalents of chart-1..5,
+// picked to stay distinguishable in greyscale as well as colour — a printed
+// chromatogram is frequently photocopied.
+const PRINT_CHANNEL_COLORS = [
+  "#c2410c",
+  "#0f766e",
+  "#a21caf",
+  "#4338ca",
+  "#15803d",
+];
+
+const CHART_W = 520;
+const CHART_H = 190;
+const CHART_PAD = { top: 8, right: 10, bottom: 22, left: 40 };
+const CHART_BOX: PlotBox = {
+  left: CHART_PAD.left,
+  top: CHART_PAD.top,
+  width: CHART_W - CHART_PAD.left - CHART_PAD.right,
+  height: CHART_H - CHART_PAD.top - CHART_PAD.bottom,
+};
+
+/**
+ * The same peak the user sees on screen.
+ *
+ * Geometry comes from buildChromatogramPaths, shared with chromatogram-chart
+ * so the printed curve cannot drift from the rendered one — only the palette
+ * and the box differ.
+ */
+function ChromatogramFigure({ c }: { c: Chromatogram }) {
+  const domains = chromatogramDomain(c);
+  const paths = buildChromatogramPaths(c, domains, CHART_BOX);
+  const peaks = channelPeaks(c);
+
+  const sx = (v: number) =>
+    CHART_BOX.left +
+    ((v - domains.x.lo) / (domains.x.hi - domains.x.lo || 1)) * CHART_BOX.width;
+  const sy = (v: number) =>
+    CHART_BOX.top +
+    CHART_BOX.height -
+    ((v - domains.y.lo) / (domains.y.hi - domains.y.lo || 1)) * CHART_BOX.height;
+
+  if (domains.empty) {
+    return <Text style={styles.empty}>（该层析图没有可绘制的数据）</Text>;
+  }
+
+  return (
+    <View>
+      <Svg width={CHART_W} height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}>
+        {c.fractions.map((f) => {
+          const x1 = sx(Math.min(f.from, f.to));
+          const x2 = sx(Math.max(f.from, f.to));
+          return (
+            <Rect
+              key={f.id}
+              x={x1}
+              y={CHART_BOX.top}
+              width={Math.max(x2 - x1, 1)}
+              height={CHART_BOX.height}
+              fill="#e8e8f0"
+            />
+          );
+        })}
+
+        {ticksOf(domains.y).map((t) => (
+          <Line
+            key={`gy${t}`}
+            x1={CHART_BOX.left}
+            x2={CHART_W - CHART_PAD.right}
+            y1={sy(t)}
+            y2={sy(t)}
+            strokeWidth={0.5}
+            stroke="#e0e0e0"
+          />
+        ))}
+        {ticksOf(domains.x).map((t) => (
+          <Line
+            key={`gx${t}`}
+            y1={CHART_BOX.top}
+            y2={CHART_H - CHART_PAD.bottom}
+            x1={sx(t)}
+            x2={sx(t)}
+            strokeWidth={0.5}
+            stroke="#e0e0e0"
+          />
+        ))}
+
+        <Line
+          x1={CHART_BOX.left}
+          x2={CHART_BOX.left}
+          y1={CHART_BOX.top}
+          y2={CHART_H - CHART_PAD.bottom}
+          strokeWidth={0.8}
+          stroke="#888"
+        />
+        <Line
+          x1={CHART_BOX.left}
+          x2={CHART_W - CHART_PAD.right}
+          y1={CHART_H - CHART_PAD.bottom}
+          y2={CHART_H - CHART_PAD.bottom}
+          strokeWidth={0.8}
+          stroke="#888"
+        />
+
+        {paths.map((d, i) =>
+          d ? (
+            <Path
+              key={c.channels[i].id}
+              d={d}
+              strokeWidth={1.2}
+              stroke={PRINT_CHANNEL_COLORS[i % PRINT_CHANNEL_COLORS.length]}
+              fill="none"
+            />
+          ) : null
+        )}
+
+        {/* Tick numbers, so a peak position can be read straight off the axis
+            rather than only from the legend. Digits are ASCII, so these render
+            regardless of which font the SVG layer resolves. */}
+        {ticksOf(domains.y).map((t) => (
+          <SvgText
+            key={`ty${t}`}
+            x={CHART_BOX.left - 4}
+            y={sy(t) + 2}
+            style={{ fontSize: 6, fill: "#666" }}
+            textAnchor="end"
+          >
+            {fmtTick(t)}
+          </SvgText>
+        ))}
+        {ticksOf(domains.x).map((t) => (
+          <SvgText
+            key={`tx${t}`}
+            x={sx(t)}
+            y={CHART_H - CHART_PAD.bottom + 9}
+            style={{ fontSize: 6, fill: "#666" }}
+            textAnchor="middle"
+          >
+            {fmtTick(t)}
+          </SvgText>
+        ))}
+      </Svg>
+
+      {/* The axis NAMES stay outside the Svg: they carry CJK (体积 / 吸光度),
+          and the SVG text layer does not reliably resolve the registered CJK
+          font the way the document body does. */}
+      <View style={styles.axisRow}>
+        <Text style={styles.axisNote}>
+          横轴：{c.xLabel}　纵轴：吸光度
+        </Text>
+      </View>
+      <View style={styles.legendRow}>
+        {c.channels.map((ch, i) => (
+          <View key={ch.id} style={styles.legendItem}>
+            <View
+              style={[
+                styles.legendSwatch,
+                {
+                  backgroundColor:
+                    PRINT_CHANNEL_COLORS[i % PRINT_CHANNEL_COLORS.length],
+                },
+              ]}
+            />
+            <Text style={styles.legendText}>
+              {ch.label}
+              {isFinite(peaks[i]?.x)
+                ? ` 峰值 ${peaks[i].y.toPrecision(3)} @ ${peaks[i].x.toPrecision(3)}`
+                : ""}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function Row({
   cells,
@@ -141,7 +339,8 @@ function Note({ label, text }: { label: string; text: string }) {
   );
 }
 
-function ReportDocument({
+/** Exported so the document can be rendered headlessly without a DOM. */
+export function TlnpReportDocument({
   batchName,
   createdAt,
   updatedAt,
@@ -362,28 +561,6 @@ function ReportDocument({
             })()}
           </View>
 
-          {d.purification.chromatograms.length > 0 && (
-            <View style={styles.table}>
-              <Row
-                head
-                widths={["34%", "22%", "22%", "22%"]}
-                cells={["层析图", "数据点", "通道", "来源"]}
-              />
-              {d.purification.chromatograms.map((c) => (
-                <Row
-                  key={c.id}
-                  widths={["34%", "22%", "22%", "22%"]}
-                  cells={[
-                    c.name,
-                    String(c.points.length),
-                    c.channels.map((ch) => ch.label).join(" / "),
-                    c.sourceName || "--",
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-
           {(() => {
             const ee = resolveEe(d.purification.results.ee);
             const dls = d.purification.results.dls;
@@ -398,6 +575,19 @@ function ReportDocument({
           <Note label="TEM" text={d.purification.results.tem.note} />
           <Note label="结果与讨论" text={d.purification.results.discussion} />
         </Section>
+
+        {/* Each figure gets its own wrap={false} block so a peak is never
+            split across a page break. */}
+        {d.purification.chromatograms.map((c) => (
+          <View key={c.id} style={styles.section} wrap={false}>
+            <Text style={styles.figureTitle}>
+              层析图 · {c.name}
+              {c.sourceName ? ` （${c.sourceName}）` : ""}
+            </Text>
+            <ChromatogramFigure c={c} />
+            {c.note.trim() !== "" && <Note label="备注" text={c.note} />}
+          </View>
+        ))}
 
         {/* ── 4 体内外实验 ── */}
         <Section title="4  体内外实验">
@@ -482,7 +672,7 @@ export async function exportTlnpToPdf(
   ensureCjkFonts();
 
   const blob = await pdf(
-    <ReportDocument
+    <TlnpReportDocument
       batchName={batchName}
       createdAt={createdAt}
       updatedAt={updatedAt}
