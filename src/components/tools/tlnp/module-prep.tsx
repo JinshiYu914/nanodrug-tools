@@ -23,6 +23,7 @@ import SampleTable from "./sample-table";
 import SampleEditorDialog from "./sample-editor-dialog";
 import FormulationOutput from "./formulation-output";
 import SampleResults from "./sample-results";
+import { paramValue } from "@/lib/calculations/tlnp-params";
 import type {
   TlnpExperimentData,
   TlnpPrepModule,
@@ -112,8 +113,9 @@ export default function ModulePrep({
             <CardTitle className="text-base">样品配方设计</CardTitle>
           </div>
           <CardDescription>
-            每行一个样品，直接改摩尔比即可；脂质种类、分子量、母液浓度和其余制备参数点
-            铅笔图标进入完整编辑器。添加样品会复制上一行，通常只需要改比例。
+            默认五个组分：阳离子脂质 / 辅助脂质 / 胆固醇 / PEG 脂质 / 偶联用
+            linker 脂质。每行一个样品，直接改摩尔比即可；脂质种类、分子量、母液浓度
+            和其余制备参数点铅笔图标进入完整编辑器。添加样品会复制上一行，通常只需要改比例。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -121,6 +123,7 @@ export default function ModulePrep({
             samples={prep.samples}
             onChange={setSamples}
             onEdit={setEditing}
+            linkerName={paramValue(prep.design.params, "linker")}
           />
         </CardContent>
       </Card>

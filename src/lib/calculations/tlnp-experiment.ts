@@ -23,6 +23,7 @@
  */
 
 import {
+  createCustomEntry,
   createDefaultEntries,
   type LipidEntry,
 } from "./lnp-formula";
@@ -195,6 +196,40 @@ function defaultPrepParams(): BenchPrepParams {
 }
 
 /**
+ * Nominal average MW of DSPE-PEG(2000)-maleimide. PEG lipids are polydisperse,
+ * so this is a catalogue figure to start from, not a constant — check the
+ * vendor CoA and edit it in the sample editor.
+ */
+const LINKER_DEFAULT_MW = "2941.6";
+
+/**
+ * The five-component tLNP formulation.
+ *
+ * A plain LNP is four lipids; a *targeted* one carries a fifth — the
+ * functionalised PEG lipid the protein is conjugated to. It is a real
+ * component with its own molar ratio, so it belongs in the formulation rather
+ * than being implied by the 反应 linker parameter.
+ *
+ * The 0.5% comes out of the plain PEG lipid's share (1.5 → 1.0 + 0.5) so the
+ * default set still sums to 100.
+ */
+export function createTlnpLipidEntries(linkerName?: string): LipidEntry[] {
+  const base = createDefaultEntries();
+  const peg = base.find((e) => e.typeKey === "peg");
+  if (peg) peg.molarRatio = "1";
+
+  const linker = createCustomEntry(1);
+  linker.typeKey = "linker";
+  linker.label = "Linker (Targeting)";
+  linker.customLipidName = linkerName?.trim() || "DSPE-PEG2k-mal";
+  linker.molarWeight = LINKER_DEFAULT_MW;
+  linker.molarRatio = "0.5";
+  linker.stockConc = "10";
+
+  return [...base, linker];
+}
+
+/**
  * A new sample clones the previous one when there is one — across a screen of
  * formulations the lipid identities, MWs, stock concentrations and prep params
  * are constant and only the molar ratios move, so cloning is what the user
@@ -202,11 +237,12 @@ function defaultPrepParams(): BenchPrepParams {
  */
 export function createTlnpSample(
   seed?: TlnpPrepSample | null,
-  name?: string
+  name?: string,
+  linkerName?: string
 ): TlnpPrepSample {
   const lipidEntries: LipidEntry[] = seed
     ? seed.lipidEntries.map((e) => ({ ...e }))
-    : createDefaultEntries();
+    : createTlnpLipidEntries(linkerName);
   return {
     id: genId(),
     name: name ?? "",

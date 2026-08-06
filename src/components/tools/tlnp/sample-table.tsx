@@ -28,6 +28,9 @@ interface Props {
   samples: TlnpPrepSample[];
   onChange: (next: TlnpPrepSample[]) => void;
   onEdit: (sample: TlnpPrepSample) => void;
+  /** From the 反应 linker design parameter — names the 5th component so the
+   *  formulation and the design section can't disagree about the linker. */
+  linkerName?: string;
 }
 
 /**
@@ -42,7 +45,12 @@ interface Props {
  * sample uses different lipids in the same slots the header would be a lie, so
  * each row also shows its own composition underneath its name.
  */
-export default function SampleTable({ samples, onChange, onEdit }: Props) {
+export default function SampleTable({
+  samples,
+  onChange,
+  onEdit,
+  linkerName,
+}: Props) {
   const columns = useMemo(
     () => samples[0]?.lipidEntries.map((e) => entryName(e)) ?? [],
     [samples]
@@ -62,7 +70,7 @@ export default function SampleTable({ samples, onChange, onEdit }: Props) {
     const last = samples[samples.length - 1] ?? null;
     onChange([
       ...samples,
-      createTlnpSample(last, `样品 ${samples.length + 1}`),
+      createTlnpSample(last, `样品 ${samples.length + 1}`, linkerName),
     ]);
   }
 
