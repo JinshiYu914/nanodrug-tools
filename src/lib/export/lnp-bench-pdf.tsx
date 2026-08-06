@@ -11,6 +11,7 @@ import {
 } from "@react-pdf/renderer";
 import {
   computeBenchFormulation,
+  describeMethod,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
 import { formatVolume } from "@/lib/calculations/lnp-formula";
@@ -229,6 +230,7 @@ function FormulationCard({
 }) {
   const computed = computeBenchFormulation(formulation);
   const { prepVolumes, stockVolumes, totalConc } = computed;
+  const methodSummary = describeMethod(formulation.method);
 
   return (
     <View style={styles.card} wrap={false} break={breakPage}>
@@ -307,6 +309,28 @@ function FormulationCard({
           </Text>
         </View>
       </View>
+
+      {/* 实验方法 — omitted entirely when nothing was recorded. */}
+      {(methodSummary || formulation.method?.note?.trim()) && (
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabel}>实验方法</Text>
+          <View style={styles.sectionBody}>
+            {methodSummary && (
+              <Text style={styles.paramCell}>
+                <Text style={styles.paramValue}>{methodSummary}</Text>
+              </Text>
+            )}
+            {formulation.method?.note?.trim() && (
+              <Text style={styles.paramCell}>
+                <Text style={styles.paramLabel}>备注 </Text>
+                <Text style={styles.paramValue}>
+                  {formulation.method.note.trim()}
+                </Text>
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* 体积 */}
       <View style={styles.sectionRow}>

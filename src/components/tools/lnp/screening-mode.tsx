@@ -26,13 +26,16 @@ import FormulationWorkspace, {
 } from "./formulation-workspace";
 import LnpSavedPanel from "@/components/tools/lnp-saved-panel";
 import {
+  createDefaultMethod,
   emptyBenchSession,
   generateFormulationId,
+  parseBenchMethod,
   parseBenchSession,
   type BenchFormulation,
   type BenchPrepParams,
   type BenchSessionData,
 } from "@/lib/calculations/lnp-bench";
+import { collectLinkedFormulationIds } from "@/lib/calculations/ribogreen";
 import type { LipidEntry } from "@/lib/calculations/lnp-formula";
 
 const num = (s: string) => {
@@ -76,12 +79,33 @@ function validateForBench(
   return null;
 }
 import {
+  getItem,
+  listAllItems,
   updateItemData,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
 import { exportBenchToXlsx } from "@/lib/export/lnp-bench-xlsx";
 
-export default function ScreeningMode() {
+export interface ScreeningFocus {
+  sessionId: string;
+  formulationId: string;
+  /** Bumped per request so the same target can be opened twice. */
+  token: number;
+}
+
+interface ScreeningModeProps {
+  /** A formulation the RiboGreen tab asked us to open. */
+  focus?: ScreeningFocus | null;
+  onFocusHandled?: () => void;
+  /** Jump to the RiboGreen tab and load a saved EE record. */
+  onOpenRibogreenRecord?: (itemId: string) => void;
+}
+
+export default function ScreeningMode({
+  focus,
+  onFocusHandled,
+  onOpenRibogreenRecord,
+}: ScreeningModeProps = {}) {
   const [activeSession, setActiveSession] = useState<LnpSavedItem | null>(
     null
   );
@@ -96,6 +120,11 @@ export default function ScreeningMode() {
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  // formulation id → the saved RiboGreen records that measured it
+  const [eeRecords, setEeRecords] = useState<Map<string, LnpSavedItem[]>>(
+    () => new Map()
+  );
 
   // Persist sessionData to Supabase whenever it mutates (after initial load).
   const sessionIdRef = useRef<string | null>(null);
@@ -143,6 +172,35 @@ export default function ScreeningMode() {
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
     setLastSavedAt(null);
+    setHighlightId(null);
+  }, []);
+
+  // Which saved RiboGreen records reference which formulation. Loaded once per
+  // mount — this tab is unmounted whenever it isn't showing, so re-entering it
+  // after saving an EE record picks the new links up.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listAllItems("ribogreen_result");
+        if (cancelled) return;
+        const map = new Map<string, LnpSavedItem[]>();
+        for (const row of rows) {
+          for (const fid of collectLinkedFormulationIds(row.data)) {
+            const list = map.get(fid);
+            if (list) list.push(row);
+            else map.set(fid, [row]);
+          }
+        }
+        setEeRecords(map);
+      } catch (e) {
+        // Not worth a toast — the links are an extra, the bench works without.
+        console.error(e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSessionDeleted = useCallback(
@@ -158,6 +216,49 @@ export default function ScreeningMode() {
     [activeSession]
   );
 
+  // A RiboGreen sample asked for its source formulation: switch sessions if
+  // needed, then load that formulation into the workspace and mark its row.
+  useEffect(() => {
+    if (!focus) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        let session = activeSession;
+        if (session?.id !== focus.sessionId) {
+          session = await getItem(focus.sessionId);
+          if (cancelled) return;
+          if (!session) {
+            toast.error("找不到对应的筛选会话，可能已被删除");
+            return;
+          }
+          handleSelectSession(session);
+        }
+        const f = parseBenchSession(session.data).formulations.find(
+          (x) => x.id === focus.formulationId
+        );
+        if (cancelled) return;
+        if (!f) {
+          toast.error("该配方已不在此筛选会话中");
+          return;
+        }
+        loadFormulationToWorkspace(f);
+        setHighlightId(f.id);
+        toast.success(`已定位到配方「${f.name}」`);
+      } catch (e) {
+        console.error(e);
+        toast.error("跳转到配方失败");
+      } finally {
+        if (!cancelled) onFocusHandled?.();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // activeSession is read, not tracked: re-running on every session change
+    // would re-apply a focus the user has already navigated away from.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
+
   function resetWorkspace() {
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
@@ -169,6 +270,7 @@ export default function ScreeningMode() {
       name: formulationName.trim() || "未命名配方",
       lipidEntries: workspace.lipidEntries.map((e) => ({ ...e })),
       prep: { ...workspace.prep },
+      method: { ...(workspace.method ?? createDefaultMethod()) },
       createdAt: new Date().toISOString(),
     };
   }
@@ -198,6 +300,7 @@ export default function ScreeningMode() {
       targetVolume: "",
       volumeUnit: "uL",
       prep: { ...f.prep },
+      method: parseBenchMethod(f.method),
     });
     setFormulationName(f.name);
     if (typeof window !== "undefined") {
@@ -442,6 +545,9 @@ export default function ScreeningMode() {
                   onExportPdf={handleExportPdf}
                   onExportXlsx={handleExportXlsx}
                   busy={exporting}
+                  highlightId={highlightId}
+                  eeRecords={eeRecords}
+                  onOpenRibogreenRecord={onOpenRibogreenRecord}
                 />
               </CardContent>
             </Card>

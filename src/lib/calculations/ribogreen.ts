@@ -243,6 +243,59 @@ export interface SampleRow {
   rnaInput: string;
   /** 需取用 LNP-RNA 量 (µg) — optional, for 取样体积 */
   needMass: string;
+  /** Screening session this sample's formulation came from, if any. */
+  sourceSessionId?: string;
+  /** Denormalized so the link still reads if the session is renamed/removed. */
+  sourceSessionName?: string;
+  /** Formulation id inside that session's bench — the jump target. */
+  sourceFormulationId?: string;
+}
+
+/** Fields the batch-fill dialog can write across many samples at once. */
+export type BatchField = "dilution" | "lnpVolume" | "rnaInput" | "needMass";
+
+export const BATCH_FIELDS: { field: BatchField; label: string }[] = [
+  { field: "dilution", label: "稀释倍数" },
+  { field: "lnpVolume", label: "LNP 体积 (µL)" },
+  { field: "rnaInput", label: "投入 RNA 量 (µg)" },
+  { field: "needMass", label: "需取用 LNP-RNA (µg)" },
+];
+
+/**
+ * Write one or more values across the chosen sample columns.
+ *
+ * `onlyEmpty` keeps per-sample edits that are already there — the point of
+ * batch fill is the common case, never overwriting the exceptions.
+ */
+export function applyBatchValues(
+  rows: readonly SampleRow[],
+  values: Partial<Record<BatchField, string>>,
+  opts: { targetIds?: ReadonlySet<string>; onlyEmpty?: boolean } = {}
+): SampleRow[] {
+  const fields = Object.keys(values) as BatchField[];
+  if (fields.length === 0) return rows.map((r) => ({ ...r }));
+
+  return rows.map((r) => {
+    if (opts.targetIds && !opts.targetIds.has(r.id)) return { ...r };
+    const next = { ...r };
+    for (const f of fields) {
+      const v = values[f];
+      if (v === undefined) continue;
+      if (opts.onlyEmpty && hasValue(next[f])) continue;
+      next[f] = v;
+    }
+    return next;
+  });
+}
+
+/** Fill a whole input row from the first sample that has a value. */
+export function fillRowFromFirst(
+  rows: readonly SampleRow[],
+  field: BatchField
+): SampleRow[] {
+  const seed = rows.find((r) => hasValue(r[field]));
+  if (!seed) return rows.map((r) => ({ ...r }));
+  return rows.map((r) => ({ ...r, [field]: seed[field] }));
 }
 
 export const DEFAULT_DILUTION = "100";
@@ -735,6 +788,25 @@ export function countFilledSamples(data: Record<string, unknown> | null): number
   }).length;
 }
 
+/**
+ * Formulation ids referenced by a saved result — lets the screening bench ask
+ * "which RiboGreen records measured this formulation?" without parsing the
+ * whole record.
+ */
+export function collectLinkedFormulationIds(
+  data: Record<string, unknown> | null | undefined
+): Set<string> {
+  const out = new Set<string>();
+  if (!data || typeof data !== "object" || !Array.isArray(data.rows)) return out;
+  for (const r of data.rows) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    if (typeof o.sourceFormulationId === "string" && o.sourceFormulationId) {
+      out.add(o.sourceFormulationId);
+    }
+  }
+  return out;
+}
+
 export function cloneCurvePair(c: CurvePair): CurvePair {
   return {
     triton: {
@@ -822,6 +894,15 @@ export function parseResultData(
       lnpVolume: str(o.lnpVolume),
       rnaInput: str(o.rnaInput),
       needMass: str(o.needMass),
+      ...(typeof o.sourceSessionId === "string"
+        ? { sourceSessionId: o.sourceSessionId }
+        : {}),
+      ...(typeof o.sourceSessionName === "string"
+        ? { sourceSessionName: o.sourceSessionName }
+        : {}),
+      ...(typeof o.sourceFormulationId === "string"
+        ? { sourceFormulationId: o.sourceFormulationId }
+        : {}),
     };
   });
 

@@ -39,6 +39,19 @@ export async function listAllItems(
   return (data ?? []) as LnpSavedItem[];
 }
 
+/** Single row by id — used by the cross-tab "open this record" links. */
+export async function getItem(id: string): Promise<LnpSavedItem | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("lnp_saved_items")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as LnpSavedItem | null) ?? null;
+}
+
 export async function createItem(
   item: Pick<
     LnpSavedItem,

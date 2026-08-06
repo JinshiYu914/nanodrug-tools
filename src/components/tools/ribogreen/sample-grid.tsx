@@ -3,15 +3,19 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRightLeft,
   ClipboardPaste,
   Copy,
   CheckCheck,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
+  FlaskConical,
   Plus,
   RotateCcw,
   Save,
   Sheet,
+  Wand2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,19 +29,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  applyBatchValues,
   applyClipboardToSamples,
   buildResultTsv,
   createBlankSample,
   effectiveSampleName,
   defaultSampleName,
+  fillRowFromFirst,
+  MAX_SAMPLE_COLUMNS,
   parseClipboardGrid,
   stepDilution,
   type BatchComputed,
+  type BatchField,
   type CopyMode,
   type CorrectionSetting,
   type PasteField,
   type SampleRow,
 } from "@/lib/calculations/ribogreen";
+import BatchFillDialog from "./batch-fill-dialog";
+import FormulationPicker, {
+  type PickedFormulation,
+} from "./formulation-picker";
 
 const fmt = (v: number | null | undefined, digits = 2) =>
   v === null || v === undefined || !isFinite(v) ? "--" : v.toFixed(digits);
@@ -69,6 +81,8 @@ interface SampleGridProps {
   onReset: () => void;
   onSave: () => void;
   onExportXlsx: () => void;
+  /** Jump to the screening bench row this sample's formulation came from. */
+  onOpenFormulation?: (sessionId: string, formulationId: string) => void;
 }
 
 const INPUT_ROWS: {
@@ -78,9 +92,17 @@ const INPUT_ROWS: {
   title?: string;
   required?: boolean;
   pasteHint?: boolean;
+  /** Rows that offer the "fill the whole row from sample 1" shortcut. */
+  batch?: BatchField;
 }[] = [
   { field: "name", label: "样本名", type: "text" },
-  { field: "dilution", label: "稀释倍数", type: "number", required: true },
+  {
+    field: "dilution",
+    label: "稀释倍数",
+    type: "number",
+    required: true,
+    batch: "dilution",
+  },
   {
     field: "readTriton",
     label: "读数 · TE (1% Triton)",
@@ -93,9 +115,20 @@ const INPUT_ROWS: {
     label: "LNP 体积 (µL)",
     type: "number",
     title: "制剂终体积，不是检测孔内体积（孔内稀释已由稀释倍数体现）",
+    batch: "lnpVolume",
   },
-  { field: "rnaInput", label: "投入 RNA 量 (µg)", type: "number" },
-  { field: "needMass", label: "需取用 LNP-RNA (µg)", type: "number" },
+  {
+    field: "rnaInput",
+    label: "投入 RNA 量 (µg)",
+    type: "number",
+    batch: "rnaInput",
+  },
+  {
+    field: "needMass",
+    label: "需取用 LNP-RNA (µg)",
+    type: "number",
+    batch: "needMass",
+  },
 ];
 
 /** Result rows the user actually reads off — rendered with emphasis. */
@@ -118,8 +151,11 @@ export default function SampleGrid({
   onReset,
   onSave,
   onExportXlsx,
+  onOpenFormulation,
 }: SampleGridProps) {
   const [copied, setCopied] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const computedById = useMemo(
     () => new Map(display.samples.map((s) => [s.id, s])),
@@ -146,31 +182,42 @@ export default function SampleGrid({
       }
     };
 
-  const warnings = useMemo(() => {
-    const out: string[] = [];
+  // Grouped by *issue*, not by sample: eight columns off the standard curve
+  // used to mean eight stacked lines. One clause per issue, samples listed
+  // inside it, the whole thing on one wrapping line.
+  const warningSummary = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    const add = (issue: string, label: string) => {
+      const list = groups.get(issue);
+      if (list) list.push(label);
+      else groups.set(issue, [label]);
+    };
+
     const fits = batch.fits;
     display.samples.forEach((s, i) => {
       const label = rows[i]
         ? effectiveSampleName(rows[i], i, experimentDate)
         : `样本 ${i + 1}`;
-      if (s.flags.missingDilution) out.push(`${label}：缺少稀释倍数`);
+      if (s.flags.missingDilution) add("缺少稀释倍数", label);
       if (s.flags.tritonRange === "above" || s.flags.tritonRange === "below") {
-        out.push(
-          `${label}：Triton 读数超出标曲范围（${fits.triton.minX} ~ ${fits.triton.maxX}），结果可能不准确`
+        add(
+          `Triton 读数超出标曲范围（${fits.triton.minX} ~ ${fits.triton.maxX}）`,
+          label
         );
       }
       if (s.flags.teRange === "above" || s.flags.teRange === "below") {
-        out.push(
-          `${label}：TE 读数超出标曲范围（${fits.te.minX} ~ ${fits.te.maxX}），结果可能不准确`
-        );
+        add(`TE 读数超出标曲范围（${fits.te.minX} ~ ${fits.te.maxX}）`, label);
       }
-      if (s.flags.negativeTotal) out.push(`${label}：总浓度为负，读数低于标曲下限`);
-      if (s.flags.negativeFree) out.push(`${label}：游离浓度为负，读数低于标曲下限`);
+      if (s.flags.negativeTotal) add("总浓度为负（读数低于标曲下限）", label);
+      if (s.flags.negativeFree) add("游离浓度为负（读数低于标曲下限）", label);
       if (s.flags.negativeLnpRna && !s.flags.negativeTotal) {
-        out.push(`${label}：游离浓度高于总浓度，LNP-RNA 为负`);
+        add("游离浓度高于总浓度，LNP-RNA 为负", label);
       }
     });
-    return out;
+
+    return [...groups]
+      .map(([issue, labels]) => `${labels.join("、")} ${issue}`)
+      .join("；");
   }, [display, batch, rows, experimentDate]);
 
   const outOfRange = (flag: string) => flag === "above" || flag === "below";
@@ -195,6 +242,53 @@ export default function SampleGrid({
   const corr = batch.correction;
   const corrected = corr.applied && showCorrected;
 
+  function handleBatchApply(
+    values: Partial<Record<BatchField, string>>,
+    opts: { targetIds?: Set<string>; onlyEmpty?: boolean }
+  ) {
+    onRowsChange(applyBatchValues(rows, values, opts));
+    const n = opts.targetIds ? opts.targetIds.size : rows.length;
+    toast.success(`已批量更新 ${n} 个样本`);
+  }
+
+  /** Load formulation names from a screening session into the sample columns. */
+  function handlePickFormulations(
+    picks: PickedFormulation[],
+    mode: "replace" | "append"
+  ) {
+    const stamp = (row: SampleRow, p: PickedFormulation): SampleRow => ({
+      ...row,
+      name: p.name,
+      sourceSessionId: p.sessionId,
+      sourceSessionName: p.sessionName,
+      sourceFormulationId: p.formulationId,
+    });
+
+    if (mode === "append") {
+      const room = MAX_SAMPLE_COLUMNS - rows.length;
+      const taken = picks.slice(0, Math.max(room, 0));
+      if (taken.length < picks.length) {
+        toast.warning(`最多 ${MAX_SAMPLE_COLUMNS} 个样本，有 ${picks.length - taken.length} 个未加入`);
+      }
+      if (taken.length === 0) return;
+      onRowsChange([...rows, ...taken.map((p) => stamp(createBlankSample(), p))]);
+      toast.success(`已追加 ${taken.length} 个样本列`);
+      return;
+    }
+
+    const next = rows.map((r, i) => (picks[i] ? stamp(r, picks[i]) : { ...r }));
+    // More formulations than columns — grow the grid rather than drop them.
+    for (let i = rows.length; i < Math.min(picks.length, MAX_SAMPLE_COLUMNS); i++) {
+      next.push(stamp(createBlankSample(), picks[i]));
+    }
+    const written = Math.min(picks.length, MAX_SAMPLE_COLUMNS);
+    onRowsChange(next);
+    if (written < picks.length) {
+      toast.warning(`最多 ${MAX_SAMPLE_COLUMNS} 个样本，有 ${picks.length - written} 个未载入`);
+    }
+    toast.success(`已载入 ${written} 个配方名`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
@@ -202,7 +296,25 @@ export default function SampleGrid({
           <ClipboardPaste className="h-3.5 w-3.5" />
           {rows.length} 个样本 · 两行读数支持从 Excel 直接粘贴（整行 / 整列 / 两行一起）
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setPickerOpen(true)}
+          >
+            <FlaskConical className="h-3.5 w-3.5" />
+            从配方筛选载入
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setBatchOpen(true)}
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            批量修改
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -233,17 +345,35 @@ export default function SampleGrid({
                 <th key={r.id} className="min-w-32 px-2 py-1 text-xs font-medium">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-muted-foreground">样本 {i + 1}</span>
-                    <button
-                      type="button"
-                      title="删除此样本"
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-30"
-                      disabled={rows.length <= 1}
-                      onClick={() =>
-                        onRowsChange(rows.filter((q) => q.id !== r.id))
-                      }
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <span className="flex items-center gap-0.5">
+                      {r.sourceFormulationId && r.sourceSessionId && (
+                        <button
+                          type="button"
+                          title={`来自配方筛选「${r.sourceSessionName ?? ""}」，点击跳转到该配方`}
+                          className="text-primary hover:text-primary/70 disabled:opacity-40"
+                          disabled={!onOpenFormulation}
+                          onClick={() =>
+                            onOpenFormulation?.(
+                              r.sourceSessionId!,
+                              r.sourceFormulationId!
+                            )
+                          }
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        title="删除此样本"
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-30"
+                        disabled={rows.length <= 1}
+                        onClick={() =>
+                          onRowsChange(rows.filter((q) => q.id !== r.id))
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
                   </div>
                 </th>
               ))}
@@ -262,6 +392,18 @@ export default function SampleGrid({
                         className="h-3 w-3 text-primary"
                         aria-label="可粘贴"
                       />
+                    )}
+                    {def.batch && rows.length > 1 && (
+                      <button
+                        type="button"
+                        title="用第一个填了值的样本填满整行"
+                        className="ml-auto text-muted-foreground hover:text-primary"
+                        onClick={() =>
+                          onRowsChange(fillRowFromFirst(rows, def.batch!))
+                        }
+                      >
+                        <ArrowRightLeft className="h-3 w-3" />
+                      </button>
                     )}
                   </span>
                 </td>
@@ -570,18 +712,14 @@ export default function SampleGrid({
         )}
       </div>
 
-      {warnings.length > 0 && (
-        <div className="rounded-md border border-warning/35 bg-warning-subtle p-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-warning">
-            <AlertTriangle className="h-4 w-4" />
-            结果可能不准确
-          </p>
-          <ul className="mt-1.5 space-y-0.5 text-xs text-warning">
-            {warnings.map((w, i) => (
-              <li key={i}>· {w}</li>
-            ))}
-          </ul>
-        </div>
+      {warningSummary && (
+        <p className="flex items-start gap-1.5 rounded-md border border-warning/35 bg-warning-subtle px-3 py-2 text-xs text-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            <span className="font-medium">结果可能不准确：</span>
+            {warningSummary}
+          </span>
+        </p>
       )}
 
       {/* ── 导出 / 保存 ──────────────────────────────── */}
@@ -623,6 +761,22 @@ export default function SampleGrid({
           保存实验记录
         </Button>
       </div>
+
+      {/* Mounted only while open so each visit starts from a clean form. */}
+      {batchOpen && (
+        <BatchFillDialog
+          open
+          onOpenChange={setBatchOpen}
+          rows={rows}
+          experimentDate={experimentDate}
+          onApply={handleBatchApply}
+        />
+      )}
+      <FormulationPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={handlePickFormulations}
+      />
     </div>
   );
 }

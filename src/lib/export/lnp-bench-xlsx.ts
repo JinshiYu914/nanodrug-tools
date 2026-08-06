@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx-js-style";
 import {
   computeBenchFormulation,
+  describeMethodParts,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
 import type { LipidEntry } from "@/lib/calculations/lnp-formula";
@@ -9,7 +10,7 @@ import type { LipidEntry } from "@/lib/calculations/lnp-formula";
  * Column layout (0-indexed) — one row per formulation with a two-row header.
  *
  *  0 序号 | 1 配方名称 | 2‑6 Lipid mix配置 | 7‑8 水相 | 9‑10 脂相 |
- *  11 水相总体积 | 12 脂相总体积 | 13 总体积 | 14‑16 制备参数
+ *  11 水相总体积 | 12 脂相总体积 | 13 总体积 | 14‑16 制备参数 | 17‑18 实验方法
  *
  * Every data cell is a volume in µL (2 decimals) except 序号, N/P ratio (a
  * ratio), FRR (an "aqueous:organic" string) and 脂相浓度 (mM).
@@ -35,8 +36,10 @@ const COL = {
   np: 14,
   frr: 15,
   mixConc: 16,
+  methodMix: 17,
+  methodPost: 18,
 } as const;
-const N_COLS = 17;
+const N_COLS = 19;
 
 const STANDARD_SLOTS = new Set(["ionizable", "helper", "cholesterol", "peg"]);
 
@@ -174,6 +177,7 @@ function buildAoa(forms: BenchFormulation[]): {
   h0[COL.orTotal] = "脂相总体积";
   h0[COL.grandTotal] = "总体积";
   h0[COL.np] = "制备参数";
+  h0[COL.methodMix] = "实验方法";
 
   const h1: Cell[] = new Array(N_COLS).fill("");
   h1[COL.ionizable] = slotHeader(forms, "ionizable", "SM102");
@@ -188,6 +192,8 @@ function buildAoa(forms: BenchFormulation[]): {
   h1[COL.np] = "N/P ratio";
   h1[COL.frr] = "FRR";
   h1[COL.mixConc] = "脂相浓度(mM)";
+  h1[COL.methodMix] = "制备方法";
+  h1[COL.methodPost] = "后处理";
 
   const aoa: Cell[][] = [h0, h1];
 
@@ -238,6 +244,14 @@ function buildAoa(forms: BenchFormulation[]): {
     row[COL.frr] = `${f.prep.frrAqueous}:${f.prep.frrOrganic}`;
     row[COL.mixConc] = isFinite(masterConc) ? masterConc : "";
 
+    const method = describeMethodParts(f.method);
+    row[COL.methodMix] = method.mixing;
+    // The free-text note rides along with the post-processing cell — it is
+    // always about how the batch was finished.
+    row[COL.methodPost] = [method.postProcess, f.method?.note?.trim()]
+      .filter(Boolean)
+      .join(" · ");
+
     aoa.push(row);
   });
 
@@ -251,6 +265,7 @@ function buildAoa(forms: BenchFormulation[]): {
     { s: { r: 0, c: COL.orTotal }, e: { r: 1, c: COL.orTotal } },
     { s: { r: 0, c: COL.grandTotal }, e: { r: 1, c: COL.grandTotal } },
     { s: { r: 0, c: COL.np }, e: { r: 0, c: COL.mixConc } },
+    { s: { r: 0, c: COL.methodMix }, e: { r: 0, c: COL.methodPost } },
   ];
 
   return { aoa, merges };
@@ -291,7 +306,7 @@ function applyStyles(ws: XLSX.WorkSheet, rowCount: number): void {
   for (let r = 2; r < rowCount; r++) {
     for (let c = 0; c < N_COLS; c++) {
       const cell = ensure(r, c);
-      if (c === COL.name) {
+      if (c === COL.name || c === COL.methodPost) {
         cell.s = nameStyle;
       } else if (DECIMAL_COLS.has(c)) {
         cell.s = numStyle;
@@ -336,6 +351,8 @@ export function exportBenchToXlsx(
     { wch: 9 }, // N/P ratio
     { wch: 8 }, // FRR
     { wch: 18 }, // Lipid mix concs(mM)
+    { wch: 12 }, // 制备方法
+    { wch: 22 }, // 后处理
   ];
   ws["!rows"] = [{ hpt: 20 }, { hpt: 30 }];
 

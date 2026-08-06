@@ -22,11 +22,142 @@ export interface BenchPrepParams {
   aminesPerMolecule: string;
 }
 
+// ─── Experiment method ────────────────────────────────────
+//
+// Recorded per formulation so a screening session can be read back months
+// later and still say *how* each batch was made — the numbers alone never
+// answer "did I dialyse this one or spin it down?".
+
+export type MixingMethodKey = "microfluidic" | "vortex" | "pipetting";
+export type PostProcessKey = "none" | "dialysis" | "ultrafiltration";
+export type DialysisDurationKey = "1h" | "2h" | "3h" | "4h" | "custom";
+export type UltrafiltrationKey = "1" | "2" | "3" | "concentrate";
+
+export interface BenchMethod {
+  /** 制备方法 — empty until the user picks one. */
+  mixing: MixingMethodKey | "";
+  /** 后处理 — 透析 / 超滤 / 不做 */
+  postProcess: PostProcessKey;
+  dialysisDuration: DialysisDurationKey | "";
+  /** free text, only meaningful when dialysisDuration === "custom" */
+  dialysisCustom: string;
+  ultrafiltration: UltrafiltrationKey | "";
+  note: string;
+}
+
+export const MIXING_OPTIONS: { key: MixingMethodKey; label: string }[] = [
+  { key: "microfluidic", label: "微流控" },
+  { key: "vortex", label: "涡旋" },
+  { key: "pipetting", label: "吹打" },
+];
+
+export const DIALYSIS_OPTIONS: {
+  key: DialysisDurationKey;
+  label: string;
+}[] = [
+  { key: "1h", label: "1 h" },
+  { key: "2h", label: "2 h" },
+  { key: "3h", label: "3 h" },
+  { key: "4h", label: "4 h" },
+  { key: "custom", label: "自定义" },
+];
+
+export const ULTRAFILTRATION_OPTIONS: {
+  key: UltrafiltrationKey;
+  label: string;
+}[] = [
+  { key: "1", label: "1 次" },
+  { key: "2", label: "2 次" },
+  { key: "3", label: "3 次" },
+  { key: "concentrate", label: "仅浓缩" },
+];
+
+export function createDefaultMethod(): BenchMethod {
+  return {
+    mixing: "",
+    postProcess: "none",
+    dialysisDuration: "",
+    dialysisCustom: "",
+    ultrafiltration: "",
+    note: "",
+  };
+}
+
+/** Never throws — an unknown / legacy shape degrades to "nothing recorded". */
+export function parseBenchMethod(raw: unknown): BenchMethod {
+  const d = createDefaultMethod();
+  if (!raw || typeof raw !== "object") return d;
+  const o = raw as Record<string, unknown>;
+  const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | "" =>
+    typeof v === "string" && (allowed as readonly string[]).includes(v)
+      ? (v as T)
+      : "";
+  const post = pick(o.postProcess, [
+    "none",
+    "dialysis",
+    "ultrafiltration",
+  ] as const);
+  return {
+    mixing: pick(o.mixing, MIXING_OPTIONS.map((m) => m.key)),
+    postProcess: post || "none",
+    dialysisDuration: pick(
+      o.dialysisDuration,
+      DIALYSIS_OPTIONS.map((m) => m.key)
+    ),
+    dialysisCustom: typeof o.dialysisCustom === "string" ? o.dialysisCustom : "",
+    ultrafiltration: pick(
+      o.ultrafiltration,
+      ULTRAFILTRATION_OPTIONS.map((m) => m.key)
+    ),
+    note: typeof o.note === "string" ? o.note : "",
+  };
+}
+
+/** One-line summary for cards, tables and exports. "" when nothing is set. */
+export function describeMethod(m: BenchMethod | undefined): string {
+  if (!m) return "";
+  const parts: string[] = [];
+  const mixing = MIXING_OPTIONS.find((o) => o.key === m.mixing);
+  if (mixing) parts.push(mixing.label);
+
+  if (m.postProcess === "dialysis") {
+    const d =
+      m.dialysisDuration === "custom"
+        ? m.dialysisCustom.trim() || "自定义"
+        : DIALYSIS_OPTIONS.find((o) => o.key === m.dialysisDuration)?.label ?? "";
+    parts.push(d ? `透析 ${d}` : "透析");
+  } else if (m.postProcess === "ultrafiltration") {
+    const u = ULTRAFILTRATION_OPTIONS.find(
+      (o) => o.key === m.ultrafiltration
+    )?.label;
+    parts.push(
+      m.ultrafiltration === "concentrate" ? "超滤（仅浓缩）" : u ? `超滤 ${u}` : "超滤"
+    );
+  }
+
+  return parts.join(" · ");
+}
+
+/** Split summary for the two-column Excel export. */
+export function describeMethodParts(m: BenchMethod | undefined): {
+  mixing: string;
+  postProcess: string;
+} {
+  if (!m) return { mixing: "", postProcess: "" };
+  const full = describeMethod(m);
+  const mixing = MIXING_OPTIONS.find((o) => o.key === m.mixing)?.label ?? "";
+  const postProcess = mixing ? full.replace(mixing, "").replace(/^ · /, "") : full;
+  return { mixing, postProcess };
+}
+
 export interface BenchFormulation {
   id: string;
   name: string;
   lipidEntries: LipidEntry[];
   prep: BenchPrepParams;
+  /** How the batch was actually made. Absent on formulations saved before
+   *  method recording existed — read through `parseBenchMethod`. */
+  method?: BenchMethod;
   notes?: string;
   createdAt: string;
 }
@@ -58,7 +189,13 @@ export function parseBenchSession(
   if (!raw || typeof raw !== "object") return emptyBenchSession();
   const forms = (raw as { formulations?: unknown }).formulations;
   if (!Array.isArray(forms)) return emptyBenchSession();
-  return { schemaVersion: 1, formulations: forms as BenchFormulation[] };
+  return {
+    schemaVersion: 1,
+    formulations: (forms as BenchFormulation[]).map((f) => ({
+      ...f,
+      method: parseBenchMethod((f as { method?: unknown }).method),
+    })),
+  };
 }
 
 /**

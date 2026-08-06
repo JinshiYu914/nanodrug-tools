@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -27,6 +27,8 @@ import {
   Play,
   FileDown,
   FileSpreadsheet,
+  ExternalLink,
+  TestTube2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +43,12 @@ import {
   composeLipidSummary,
   composeRatioSummary,
   computeBenchFormulation,
+  describeMethod,
   generateFormulationId,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
 import { formatVolume } from "@/lib/calculations/lnp-formula";
+import type { LnpSavedItem } from "@/lib/supabase/lnp-service";
 
 interface Props {
   formulations: BenchFormulation[];
@@ -53,6 +57,11 @@ interface Props {
   onExportPdf?: (formulations: BenchFormulation[]) => void;
   onExportXlsx?: (formulations: BenchFormulation[]) => void;
   busy?: boolean;
+  /** Formulation to scroll to and outline — set by a RiboGreen sample link. */
+  highlightId?: string | null;
+  /** formulation id → saved RiboGreen records that measured it */
+  eeRecords?: Map<string, LnpSavedItem[]>;
+  onOpenRibogreenRecord?: (itemId: string) => void;
 }
 
 export default function ScreeningBench({
@@ -62,6 +71,9 @@ export default function ScreeningBench({
   onExportPdf,
   onExportXlsx,
   busy,
+  highlightId,
+  eeRecords,
+  onOpenRibogreenRecord,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -236,6 +248,9 @@ export default function ScreeningBench({
                   index={i + 1}
                   f={f}
                   isSelected={selected.has(f.id)}
+                  isHighlighted={highlightId === f.id}
+                  eeRecords={eeRecords?.get(f.id) ?? []}
+                  onOpenRibogreenRecord={onOpenRibogreenRecord}
                   isRenaming={renamingId === f.id}
                   onToggleSelect={() => toggleSelected(f.id)}
                   onLoad={() => onLoad(f)}
@@ -260,6 +275,9 @@ function FormulationCard({
   index,
   f,
   isSelected,
+  isHighlighted,
+  eeRecords,
+  onOpenRibogreenRecord,
   isRenaming,
   onToggleSelect,
   onLoad,
@@ -272,6 +290,9 @@ function FormulationCard({
   index: number;
   f: BenchFormulation;
   isSelected: boolean;
+  isHighlighted: boolean;
+  eeRecords: LnpSavedItem[];
+  onOpenRibogreenRecord?: (itemId: string) => void;
   isRenaming: boolean;
   onToggleSelect: () => void;
   onLoad: () => void;
@@ -283,12 +304,22 @@ function FormulationCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: f.id });
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
+  // Arriving from a RiboGreen sample link: bring the row into view.
+  useEffect(() => {
+    if (isHighlighted) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isHighlighted]);
+
+  const method = describeMethod(f.method);
 
   const computed = useMemo(() => computeBenchFormulation(f), [f]);
   const [renameValue, setRenameValue] = useState(f.name);
@@ -302,9 +333,14 @@ function FormulationCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el);
+        cardRef.current = el;
+      }}
       style={style}
-      className="rounded-lg border bg-card transition-colors hover:border-muted-foreground/30"
+      className={`rounded-lg border bg-card transition-colors hover:border-muted-foreground/30 ${
+        isHighlighted ? "border-primary bg-primary/5" : ""
+      }`}
     >
       <div className="flex items-stretch gap-2 px-3 py-2">
         {/* Drag handle */}
@@ -363,6 +399,41 @@ function FormulationCard({
                 ({composeRatioSummary(f)})
               </span>
             </span>
+
+            {method && (
+              <span
+                className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap"
+                title="实验方法"
+              >
+                {method}
+              </span>
+            )}
+
+            {eeRecords.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex items-center gap-1 rounded-md border border-primary/40 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+                    title="已有 RiboGreen 包封率结果"
+                  >
+                    <TestTube2 className="h-3 w-3" />
+                    EE {eeRecords.length}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-w-64">
+                  {eeRecords.map((r) => (
+                    <DropdownMenuItem
+                      key={r.id}
+                      disabled={!onOpenRibogreenRecord}
+                      onSelect={() => onOpenRibogreenRecord?.(r.id)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span className="truncate">{r.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground whitespace-nowrap">
               <span>
