@@ -34,10 +34,8 @@ corepack pnpm@10 build
 
 | 路由 | 期望 |
 |---|---|
-| `/` | 首页：hero + 三大方向 + 主题卡片 |
-| `/research` | 方向/主题索引 |
-| `/research/lipid-nanoparticle` | 方向页 |
-| `/research/lipid-nanoparticle/antibody-targeting` | **两条路径都要测**：① 从卡片点进去 → 浮层；② 直接访问/刷新 → 完整页面 |
+| `/` | 首页：hero + 给药路线图 + 框架面板 + 工具入口带（见下方第 3 节） |
+| `/#lytac-degrader` | 直接访问要自动切到 Disease 站点并展开该课题 |
 | `/progress` | 文献进展流（阶段三前显示空态） |
 | `/assistant` | 占位页 |
 | `/tools` | 入口页，LNP Suite 组排第一 |
@@ -68,7 +66,26 @@ corepack pnpm@10 build
    `public/fonts/NotoSansSC-*.woff` **不是废弃资源** —— `src/lib/export/lnp-bench-pdf.tsx:23-28`
    注册了它，第 38 行设为页面默认字体。**永久保留这两个字体文件**，因为用户仍可能在配方名里输入中文。
 
-## 3. 配色与语言残留检查
+## 3. 首页给药路线图专项检查
+
+`src/components/research/dose-route.tsx`。几何是写死的 viewBox 坐标，改任何一个数都要重跑这一节。
+
+1. **断点**：视口 1440 / 1280 / 1024 走一遍横向路线 —— 三个站点不能互相重叠、不能压到分叉上，
+   `03 · APPLICATION` 那行不能换行（靠 `whitespace-nowrap`）。768 / 390 走竖排版本。
+2. **改过 `LEGS[].d` 就必须重新量长度**：控制台跑
+   `$$('svg path.route-draw').map(p => p.getTotalLength())`，把结果填回 `len`。
+   **偏小会让线尾永远画不出来**（dash 揭示靠的就是这个数）。
+3. **载入编排**：整条路线一笔画出 → 三个站点依次落位 → 分叉展开 → 面板上浮，之后**完全静止**。
+   要逐帧看的话，`document.getAnimations().forEach(a => a.pause())` 之后手动 seek `currentTime`；
+   直接按墙钟时间截图是不准的，dev server 会在 hydration 之后才注入样式表。
+   历史 bug：`.route-draw` 用 `forwards` 而不是 `both` 时，带 delay 的后两段会在等待期间**满格显示**。
+4. **减少动态效果**：系统开启后刷新，页面直接是终态，`stroke-dasharray` 计算值为 `none`。
+5. **面板不跳**：在两课题（LNP）和四课题（Disease）之间来回悬停，面板下方的内容不能上下窜动。
+   `md:min-h-[17.25rem]` 是按实测最高的方向（274px）定的，课题数变化时要重新量。
+6. **分叉联动**：悬停 03 后展开某个疾病课题，对应的那条分叉加粗、其余三条淡出。
+7. **键盘**：Tab 能依次走到三个站点，焦点环可见，面板跟着切换。
+
+## 4. 配色与语言残留检查
 
 硬编码调色板（class 字符串没法用 lint 规则可靠捕获），结果应接近于零：
 
@@ -82,7 +99,7 @@ grep -rnoE '\b(text|bg|border|from|to|via|ring)-(red|orange|amber|yellow|lime|gr
 grep -rlP '[\p{Han}]' src/ --include='*.tsx' --include='*.ts'
 ```
 
-## 4. 主题一致性
+## 5. 主题一致性
 
 任何改动 `src/app/globals.css` 之后，重点看这两个「金丝雀」页面在亮/暗两种模式下的表格对齐与可读性：
 

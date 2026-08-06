@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LnpCrossSection } from "@/components/diagrams";
 import { Sticker } from "@/components/diagrams/primitives";
 import { ResearchInterests } from "@/components/research/research-interests";
 
@@ -9,64 +8,53 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* ---------------------------------------------------------------
-       * Hero. The particle is the thesis, so it is drawn at full size and
-       * given equal weight to the headline rather than used as garnish.
+       * Hero. The headline states the problem; the route immediately below
+       * is the answer, so there is no illustration here — the particle is
+       * station 01 and drawing it twice would halve the impact of both.
        * ------------------------------------------------------------- */}
       <section className="relative overflow-hidden">
+        {/* Marginalia. xl only — below that the container reaches the viewport
+            edge and these land on top of the copy. */}
         <Sticker
           shape="arc"
           tone="var(--pillar-utr)"
-          className="absolute -left-10 top-24 hidden size-32 -rotate-12 opacity-70 lg:block"
+          className="absolute -left-12 top-24 hidden size-32 -rotate-12 opacity-70 xl:block"
         />
         <Sticker
           shape="coil"
           tone="var(--pillar-disease)"
-          className="absolute -right-6 bottom-16 hidden size-28 rotate-6 opacity-70 lg:block"
+          className="absolute -right-10 top-44 hidden size-28 rotate-6 opacity-70 xl:block"
         />
 
-        <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-12 pt-16 sm:px-6 sm:pb-16 sm:pt-24 lg:grid-cols-[1.2fr_1fr] lg:items-center">
-          <div>
-            <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Lipid nanoparticles · mRNA · targeted delivery
-            </p>
+        <div className="mx-auto max-w-6xl px-4 pb-4 pt-16 sm:px-6 sm:pt-20">
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Research interests
+          </p>
 
-            <h1 className="mt-5 text-balance font-display text-4xl font-extrabold leading-[1.06] tracking-tight sm:text-5xl lg:text-[3.5rem]">
+          <div className="mt-5 grid gap-8 lg:grid-cols-[1.35fr_1fr] lg:items-end">
+            <h1 className="max-w-3xl text-balance font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.75rem]">
               Getting the right message into the{" "}
               <span className="text-pillar-lnp">right cell</span>.
             </h1>
 
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
-              Most of an LNP dose goes to the liver whether you want it to or
-              not. Three arms of work on that — and on what it makes treatable.
-            </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Button asChild size="lg" className="gap-2 font-semibold shadow-sticker-sm">
-                <Link href="#research">
-                  Research interests <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="font-semibold">
-                <Link href="/tools">Open Lab Tools</Link>
-              </Button>
+            <div className="lg:pb-2">
+              <p className="max-w-md leading-relaxed text-muted-foreground">
+                Most of an intravenous LNP dose goes to the liver whether you
+                want it to or not. Three stages of work on that — and on what it
+                makes treatable.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button asChild className="gap-2 font-semibold shadow-sticker-sm">
+                  <Link href="/progress">
+                    Research progress <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="font-semibold">
+                  <Link href="/tools">Open Lab Tools</Link>
+                </Button>
+              </div>
             </div>
           </div>
-
-          <div className="sketch-card p-6 [--sketch-border-color:var(--pillar-lnp)] sm:p-8">
-            <LnpCrossSection />
-          </div>
-        </div>
-
-        <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
-          <Link
-            href="#research"
-            className="inline-flex items-center gap-3 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span className="flex size-9 items-center justify-center rounded-full border-2 border-ink/25">
-              <ArrowDown className="size-4" />
-            </span>
-            Research interests
-          </Link>
         </div>
       </section>
 

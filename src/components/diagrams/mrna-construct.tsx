@@ -1,6 +1,13 @@
 import { DiagramFrame, Label, STROKE, type DiagramProps } from "./primitives";
 
 /**
+ * Crop to the construct itself: cap at x≈27, poly(A) tail ending at x≈370,
+ * everything between y 81 and 118. Leaves a long flat band, which is the shape
+ * of the thing being drawn.
+ */
+const CROP = "20 72 358 56";
+
+/**
  * The mRNA construct, drawn to scale-ish: cap, 5′ UTR, coding sequence,
  * 3′ UTR, poly(A).
  *
@@ -17,7 +24,7 @@ export function MrnaConstruct({ variant = "full", className }: DiagramProps) {
     <DiagramFrame
       title="mRNA construct with untranslated regions highlighted"
       desc="From left: 5-prime cap, 5-prime UTR, coding sequence, 3-prime UTR, and poly-A tail. Both UTRs are highlighted as the engineered regions."
-      viewBox="0 0 400 200"
+      viewBox={showLabels ? "0 0 400 200" : CROP}
       className={className}
     >
       {/* Cap */}

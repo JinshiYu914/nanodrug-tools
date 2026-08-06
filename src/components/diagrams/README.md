@@ -26,8 +26,12 @@ need a light copy and a dark copy of every drawing, and they would drift.
    deliberately irregular path geometry — perturbed circle beziers, uneven
    tick lengths, arcs that do not quite close. Turbulence on 1.5px strokes
    looks muddy and costs paint time on every scroll.
-7. **`variant="thumb"` must drop labels.** 11px type inside a 280px card is
-   noise. The drawing has to survive without them.
+7. **`variant="thumb"` must drop labels _and_ tighten the viewBox.** 11px type
+   inside a 280px card is noise, so the labels go — but the full viewBox
+   reserves space for those labels, and leaving it in place just shrinks the
+   drawing into a corner of its own box. Every diagram declares a `CROP`
+   constant next to its component and swaps to it. Anything the crop excludes
+   should not be rendered at all rather than left to clip.
 
 ## Stroke weights
 

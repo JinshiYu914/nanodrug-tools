@@ -5,6 +5,9 @@ const CY = 128;
 const R_INNER = 62;
 const R_OUTER = 78;
 
+/** Square crop around the particle: centre (122, 128), outermost PEG tip at r≈99. */
+const CROP = "18 24 208 208";
+
 /** Fixed wobble per element. Deterministic, so SSR and client agree. */
 const JITTER = [0.9, -1.4, 0.5, 1.8, -0.7, 1.2, -1.9, 0.3, 1.5, -1.1, 0.8, -0.4];
 
@@ -20,6 +23,10 @@ function polar(angle: number, radius: number) {
  * hepatic uptake from active targeting, so it carries the accent colour while
  * everything structural stays ink. Shell arcs are hand-perturbed circles
  * rather than <circle>, which is what gives the drawn feel.
+ *
+ * `thumb` crops to the particle. The full viewBox reserves its right half for
+ * callouts, so keeping it without the labels would shrink the particle to a
+ * third of the space for nothing.
  */
 export function LnpCrossSection({ variant = "full", className }: DiagramProps) {
   const showLabels = variant === "full";
@@ -45,7 +52,7 @@ export function LnpCrossSection({ variant = "full", className }: DiagramProps) {
     <DiagramFrame
       title="Lipid nanoparticle in cross-section"
       desc="A PEGylated lipid shell around an aqueous core containing coiled mRNA, with a targeting antibody conjugated to the surface."
-      viewBox="0 0 400 256"
+      viewBox={showLabels ? "0 0 400 256" : CROP}
       className={className}
     >
       <path d={pegs} stroke="currentColor" strokeWidth={STROKE.detail} opacity="0.85" />

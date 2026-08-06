@@ -280,40 +280,82 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Orbit map motion.
+ * Dose route motion.
  *
- * The ambient motion lives in the connectors and a pulse behind the core —
- * never in the arm nodes themselves. Drifting a hit target a few pixels forever
- * makes it something you have to chase, and these have to be hovered.
+ * One orchestrated arrival, then stillness. Nothing here loops: the route draws
+ * itself once, the stations land as the line reaches them, the panel settles,
+ * and after ~1.4s the page is static until you point at something. An ambient
+ * loop on a hit target is a thing you have to chase, and a perpetual pulse says
+ * nothing the first viewing did not already say.
  *
- * The pulse element is centred with translate(-50%, -50%), so its keyframes
- * must carry that translate through or it snaps to the corner.
+ * `--route-len` is the path length in user units, set inline from a measured
+ * constant — see ROUTE_LENGTH in dose-route.tsx.
  * ------------------------------------------------------------------------- */
-@keyframes orbit-flow {
+@keyframes route-draw {
+  from {
+    stroke-dashoffset: var(--route-len);
+  }
   to {
-    stroke-dashoffset: -32;
+    stroke-dashoffset: 0;
   }
 }
 
-@keyframes orbit-pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(0.96);
-    opacity: 0.45;
+@keyframes station-in {
+  from {
+    opacity: 0;
+    scale: 0.92;
   }
-  70%,
-  100% {
-    transform: translate(-50%, -50%) scale(1.45);
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes route-fade-in {
+  from {
     opacity: 0;
   }
 }
 
-@layer components {
-  .orbit-link {
-    stroke-dasharray: 7 9;
-    animation: orbit-flow 1.9s linear infinite;
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
   }
-  .orbit-pulse {
-    animation: orbit-pulse 3.4s ease-out infinite;
+  to {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+@layer components {
+  /* The ink spine. Drawn once on load.
+     `both`, not `forwards`: the later legs carry an animation-delay, and
+     without the backwards half they render fully drawn while waiting their
+     turn — the whole route appears at once and only the tail animates. */
+  .route-draw {
+    stroke-dasharray: var(--route-len);
+    animation: route-draw 1.15s cubic-bezier(0.32, 0.06, 0.24, 1) both;
+  }
+
+  /* A coloured leg revealed on activation. Remounted via key= so it replays. */
+  .route-leg-in {
+    stroke-dasharray: var(--route-len);
+    animation: route-draw 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+
+  /* `backwards` holds the from-state during the delay, so a station is not
+     briefly visible at full size before its turn. */
+  .station-in {
+    animation: station-in 450ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  }
+  /* Opacity only. `scale` on an SVG group would key off the transform-box and
+     collapse the branches toward the viewBox origin. */
+  .route-fade-in {
+    animation: route-fade-in 400ms ease-out backwards;
+  }
+  .panel-in {
+    animation: panel-in 400ms ease-out 950ms backwards;
   }
 }
 
@@ -323,11 +365,12 @@
     transition: none;
     transform: none;
   }
-  .orbit-link,
-  .orbit-pulse {
+  .route-draw,
+  .route-leg-in,
+  .station-in,
+  .route-fade-in,
+  .panel-in {
     animation: none;
-  }
-  .orbit-pulse {
-    opacity: 0;
+    stroke-dasharray: none;
   }
 }

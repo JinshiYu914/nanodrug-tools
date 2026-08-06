@@ -7,40 +7,47 @@ const BRANCHES = [
   { y: 202, label: "LYTAC degrader" },
 ] as const;
 
+/** Square crop around the cell blob, which spans x 79–215 and y 60–200. */
+const CROP = "74 56 148 148";
+
 /**
  * What the platform is for: one particle reaches one cell, and four programmes
  * branch out of that single delivery event.
  *
  * Drawn as a fan rather than a stack because the four are alternatives sharing
  * an upstream, not a sequence — the shape encodes that.
+ *
+ * `thumb` is the cell alone. Wherever it appears at that size the arrival and
+ * the fan are already drawn by the surrounding layout (see `dose-route.tsx`),
+ * so keeping them here would draw the particle and the branches twice.
  */
 export function DiseaseProgrammes({ variant = "full", className }: DiagramProps) {
-  const showLabels = variant === "full";
+  const full = variant === "full";
 
   return (
     <DiagramFrame
-      title="Four disease programmes branching from one delivery event"
+      title={
+        full
+          ? "Four disease programmes branching from one delivery event"
+          : "A cell with the delivered message inside it"
+      }
       desc="A lipid nanoparticle enters a cell; from that cell, four branches lead to targeted protein degradation, tumour immunotherapy, gene editing, and cell therapy."
-      viewBox="0 0 400 256"
+      viewBox={full ? "0 0 400 256" : CROP}
       className={className}
     >
       {/* Incoming particle */}
-      <path
-        d="M30 128c10 0 17 7 17 15s-7 16-17 15-16-7-16-15 6-15 16-15Z"
-        fill="var(--pillar-lnp)"
-        stroke="currentColor"
-        strokeWidth={STROKE.detail}
-      />
-      <path
-        d="M52 143h18"
-        stroke="currentColor"
-        strokeWidth={STROKE.detail}
-      />
-      <path
-        d="M64 138l7 5-7 5"
-        stroke="currentColor"
-        strokeWidth={STROKE.detail}
-      />
+      {full ? (
+        <>
+          <path
+            d="M30 128c10 0 17 7 17 15s-7 16-17 15-16-7-16-15 6-15 16-15Z"
+            fill="var(--pillar-lnp)"
+            stroke="currentColor"
+            strokeWidth={STROKE.detail}
+          />
+          <path d="M52 143h18" stroke="currentColor" strokeWidth={STROKE.detail} />
+          <path d="M64 138l7 5-7 5" stroke="currentColor" strokeWidth={STROKE.detail} />
+        </>
+      ) : null}
 
       {/* Cell — an uneven blob, not a circle */}
       <path
@@ -64,33 +71,24 @@ export function DiseaseProgrammes({ variant = "full", className }: DiagramProps)
       />
 
       {/* Fan of outcomes */}
-      {BRANCHES.map((branch) => (
-        <g key={branch.y}>
-          <path
-            d={`M214 138C238 138 240 ${branch.y} 262 ${branch.y}`}
-            stroke="var(--pillar-disease)"
-            strokeWidth={STROKE.detail}
-            opacity="0.8"
-          />
-          <circle
-            cx="268"
-            cy={branch.y}
-            r="5.5"
-            fill="var(--pillar-disease)"
-            stroke="none"
-          />
-        </g>
-      ))}
-
-      {showLabels
+      {full
         ? BRANCHES.map((branch) => (
-            <Label
-              key={branch.y}
-              x={282}
-              y={branch.y + 4}
-              text={branch.label}
-              tone="ink"
-            />
+            <g key={branch.y}>
+              <path
+                d={`M214 138C238 138 240 ${branch.y} 262 ${branch.y}`}
+                stroke="var(--pillar-disease)"
+                strokeWidth={STROKE.detail}
+                opacity="0.8"
+              />
+              <circle
+                cx="268"
+                cy={branch.y}
+                r="5.5"
+                fill="var(--pillar-disease)"
+                stroke="none"
+              />
+              <Label x={282} y={branch.y + 4} text={branch.label} tone="ink" />
+            </g>
           ))
         : null}
     </DiagramFrame>
