@@ -40,6 +40,7 @@ corepack pnpm@10 build
 | `/assistant` | 占位页 |
 | `/tools` | 入口页，LNP Suite 组排第一 |
 | `/tools/lnp-formula` | 三个 tab，见下方专项检查 |
+| `/tools/tlnp` | tLNP 工作台，未登录显示页内登录卡片；见下方 2.5 节 |
 | `/tools/mol-weight` | 独立页 |
 | `/tools/molar-concentration` | 独立页 |
 | `/tools/dilution` | 独立页 |
@@ -65,6 +66,36 @@ corepack pnpm@10 build
 6. **中文 PDF 不能坏**：导出一份**配方名含中文**的筛选 PDF，中文必须正常显示。
    `public/fonts/NotoSansSC-*.woff` **不是废弃资源** —— `src/lib/export/lnp-bench-pdf.tsx:23-28`
    注册了它，第 38 行设为页面默认字体。**永久保留这两个字体文件**，因为用户仍可能在配方名里输入中文。
+
+## 2.5 tLNP 工作台专项回归检查
+
+`/tools/tlnp`。改动 `src/components/tools/tlnp/**` 或 `src/lib/calculations/tlnp-*.ts` 之后重跑。
+
+1. **登录门**：未登录访问显示页内登录卡片，不崩、不跳转（`/tools/*` 不受 middleware 保护，
+   真正的隔离靠 RLS）。
+2. **迁移失败模式**：`004_tlnp_experiment.sql` 未执行时新建批次必须提示
+   「请先在 Supabase 执行 004_tlnp_experiment.sql 迁移」，而不是笼统的「操作失败」。
+   Supabase 返回的是 Postgres `23514`，`describeError(e, "004_tlnp_experiment.sql")` 负责翻译。
+3. **自动保存节流**：填一段讨论文字，看 Network 面板 —— 停止输入约 800 ms 后**只发一次** PATCH。
+   每敲一键一次请求说明防抖坏了（`use-tlnp-batch.ts`）。
+4. **参数往返**：手输一个新值 →「存为选项」→ 新增一个自定义参数字段 → 刷新页面。
+   **值、被提升的选项、自定义字段的标签都必须回来**。这条靠 `ParamEntry` 自带 label/options，
+   而不是靠代码侧注册表 —— 坏了的话表现是自定义字段消失或变成「自定义参数」。
+5. **损坏数据容忍**：在 Supabase 把某批次 `data` 改成 `{}` 或 `{"prep":{"samples":"nonsense"}}`，
+   两次都必须打开成一个空但可用的批次。`parseTlnpExperiment` 永不抛错。
+6. **配方一致性**：同一个配方在 `/tools/lnp-formula` 单配方计算和 tLNP 样品里搭出来，
+   吸取体积和水相/脂相数字必须逐位一致（两边都走 `computeBenchFormulation`）。
+7. **RiboGreen 双向联动**：RiboGreen 标签页「从配方载入样本名」→ 切来源到「tLNP 批次」→ 选样品
+   → 填读数保存 → 回到批次，模块 1 表征结果显示「已关联」，导入的四个数与 RiboGreen 表格一致；
+   再点样本格里的外链图标 → 落到 `/tools/tlnp?batch=…&m=1`。**同时确认原有筛选会话流程没坏**
+   （历史行数据没有 `sourceKind`，按 screening_session 处理）。
+8. **画布**：拖样品到反应条件 → 生成连线和产物节点；刷新后位置和连线不变；
+   条件→条件的非法连接被拒；删掉一个条件时它的连线和产物级联消失；
+   开着画布切暗色，边线/handle/背景/controls 全部跟随（`.tlnp-flow` 把 `--xy-*-default` 映射到我们的 token）。
+9. **峰图**：从 Excel 复制三列（体积/A260/A280）粘贴 → 识别出两个通道；同样内容传 CSV → 图完全相同；
+   粘贴垃圾 → 不崩且出 warning 提示。缺失读数处曲线**断开**，不能插值连过去。
+10. **导出**：批次总览导出 PDF（**用含中文的样品名**，确认 CJK 正常）、Excel、JSON 三种都能出；
+    Excel 的「配方」表和 LNP Calculator 的筛选导出是同一个 `buildBenchSheet`，两边必须一致。
 
 ## 3. 首页给药路线图专项检查
 
@@ -121,6 +152,8 @@ grep -rlP '[\p{Han}]' src/ --include='*.tsx' --include='*.ts'
 
 - `src/components/tools/ribogreen/sample-grid.tsx`（96 列样品网格）
 - `src/components/tools/lnp/formulation-workspace.tsx`（配方工作区）
+- `src/components/tools/tlnp/conjugation-flow.tsx`（偶联画布 —— 第三方组件里唯一吃我们 token 的地方）
 
 另外确认 `src/components/tools/ribogreen/scatter-fit-chart.tsx` 的散点与拟合线颜色在明暗模式下
-**色相一致**（历史 bug：`--chart-1` 亮色是橙、暗色是蓝紫）。
+**色相一致**（历史 bug：`--chart-1` 亮色是橙、暗色是蓝紫）。同一条规则适用于
+`chromatogram-chart.tsx` 的多通道曲线：一条峰不能因为切了主题就换个颜色身份。

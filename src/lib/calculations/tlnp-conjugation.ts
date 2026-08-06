@@ -28,7 +28,8 @@ export interface ConjugationDose {
   /** How much LNP stock to take. */
   lnpVolume_uL: number | null;
   proteinVolume_uL: number | null;
-  /** Make-up buffer to reach the total. Negative means it doesn't fit. */
+  /** Always null today: nothing in the form pins a target volume, so there is
+   *  no make-up volume to solve for. Kept so adding one later is additive. */
   bufferVolume_uL: number | null;
   totalVolume_uL: number | null;
   lnpRna_nmol: number | null;
@@ -94,30 +95,36 @@ export function computeConjugationDose(
   }
 
   const protein_nmol = lnpRna_nmol * ratio;
-  // mg/mL == µg/µL, so nmol × (g/mol) / (µg/µL) → µL after the 1e-3 for µg↔ng.
+
+  // Concentration → nmol per µL.
+  //   mg/mL is numerically µg/µL, and (u µg/µL) / (MW g/mol) = u·1000/MW nmol/µL.
+  //   µM is µmol/L, which is 1e-3 nmol/µL.
   const proteinConc_nmol_per_uL =
     c.proteinConcUnit === "uM"
-      ? proteinConc / 1000 // µM = nmol/mL → nmol/µL
-      : (proteinConc * 1000) / proteinMW / 1000; // mg/mL → µg/µL → nmol/µL
+      ? proteinConc / 1000
+      : (proteinConc * 1000) / proteinMW;
+
   const proteinVolume_uL =
     proteinConc_nmol_per_uL > 0 ? protein_nmol / proteinConc_nmol_per_uL : null;
 
-  // The reaction is run at the LNP's own volume unless the protein alone
-  // already exceeds it, which is worth saying out loud.
-  const totalVolume_uL = lnpVolume_uL;
-  const bufferVolume_uL =
-    proteinVolume_uL !== null ? totalVolume_uL - lnpVolume_uL - proteinVolume_uL : null;
+  // The reaction is simply the two volumes combined. There is no make-up buffer
+  // to solve for unless the user pins a target volume, which this form doesn't
+  // ask for — reporting a number here would be inventing one.
+  const bufferVolume_uL = null;
+  const totalVolume_uL =
+    proteinVolume_uL !== null ? lnpVolume_uL + proteinVolume_uL : lnpVolume_uL;
 
-  if (proteinVolume_uL !== null && proteinVolume_uL > lnpVolume_uL) {
-    warnings.push("蛋白取用体积已超过 LNP 体积，需提高蛋白浓度或降低摩尔比");
+  // Not an error — it still reacts — but past ~2× the LNP volume the particles
+  // are being meaningfully diluted, which changes the kinetics.
+  if (proteinVolume_uL !== null && proteinVolume_uL > lnpVolume_uL * 2) {
+    warnings.push("蛋白取用体积远大于 LNP 体积，反应体系被明显稀释");
   }
 
   return {
     lnpVolume_uL,
     proteinVolume_uL,
     bufferVolume_uL,
-    totalVolume_uL:
-      proteinVolume_uL !== null ? lnpVolume_uL + proteinVolume_uL : totalVolume_uL,
+    totalVolume_uL,
     lnpRna_nmol,
     protein_nmol,
     warnings,
