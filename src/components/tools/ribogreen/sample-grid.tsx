@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -262,6 +263,7 @@ export default function SampleGrid({
       sourceSessionId: p.sessionId,
       sourceSessionName: p.sessionName,
       sourceFormulationId: p.formulationId,
+      sourceKind: p.sourceKind,
     });
 
     if (mode === "append") {
@@ -346,22 +348,34 @@ export default function SampleGrid({
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-muted-foreground">样本 {i + 1}</span>
                     <span className="flex items-center gap-0.5">
-                      {r.sourceFormulationId && r.sourceSessionId && (
-                        <button
-                          type="button"
-                          title={`来自配方筛选「${r.sourceSessionName ?? ""}」，点击跳转到该配方`}
-                          className="text-primary hover:text-primary/70 disabled:opacity-40"
-                          disabled={!onOpenFormulation}
-                          onClick={() =>
-                            onOpenFormulation?.(
-                              r.sourceSessionId!,
-                              r.sourceFormulationId!
-                            )
-                          }
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      {r.sourceFormulationId &&
+                        r.sourceSessionId &&
+                        // A tLNP sample lives on another route, so it links
+                        // rather than calling back into this page's tab state.
+                        (r.sourceKind === "tlnp_experiment" ? (
+                          <Link
+                            href={`/tools/tlnp?batch=${r.sourceSessionId}&m=1`}
+                            title={`来自 tLNP 批次「${r.sourceSessionName ?? ""}」，点击打开该批次`}
+                            className="text-primary hover:text-primary/70"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            title={`来自配方筛选「${r.sourceSessionName ?? ""}」，点击跳转到该配方`}
+                            className="text-primary hover:text-primary/70 disabled:opacity-40"
+                            disabled={!onOpenFormulation}
+                            onClick={() =>
+                              onOpenFormulation?.(
+                                r.sourceSessionId!,
+                                r.sourceFormulationId!
+                              )
+                            }
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </button>
+                        ))}
                       <button
                         type="button"
                         title="删除此样本"

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, FlaskConical, MessageSquare, Rows3 } from "lucide-react";
+import {
+  Calculator,
+  FlaskConical,
+  MessageSquare,
+  Rows3,
+  TestTube2,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,6 +22,7 @@ import SolventExchangePicker from "./solvent-exchange";
 import SampleTable from "./sample-table";
 import SampleEditorDialog from "./sample-editor-dialog";
 import FormulationOutput from "./formulation-output";
+import SampleResults from "./sample-results";
 import type {
   TlnpExperimentData,
   TlnpPrepModule,
@@ -136,6 +143,21 @@ export default function ModulePrep({
             updatedAt={updatedAt}
             samples={prep.samples}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <TestTube2 className="h-4 w-4 text-pillar-utr" />
+            <CardTitle className="text-base">表征结果</CardTitle>
+          </div>
+          <CardDescription>
+            包封率可从已保存的 RiboGreen 记录一键导入，也可以手动填写。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SampleResults samples={prep.samples} onChange={setSamples} />
         </CardContent>
       </Card>
 

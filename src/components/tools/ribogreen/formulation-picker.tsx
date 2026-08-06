@@ -19,13 +19,31 @@ import {
   parseBenchSession,
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
+import { parseTlnpExperiment } from "@/lib/calculations/tlnp-experiment";
 import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
+
+/** Which kind of saved row the formulations are being read out of. */
+type SourceKind = "screening_session" | "tlnp_experiment";
+
+const SOURCES: { key: SourceKind; label: string; empty: string }[] = [
+  {
+    key: "screening_session",
+    label: "配方筛选",
+    empty: "还没有配方筛选会话 —— 先到「配方筛选（批量）」标签页建立一个。",
+  },
+  {
+    key: "tlnp_experiment",
+    label: "tLNP 批次",
+    empty: "还没有 tLNP 实验批次 —— 先到 tLNP 工作台建立一个。",
+  },
+];
 
 export interface PickedFormulation {
   sessionId: string;
   sessionName: string;
   formulationId: string;
   name: string;
+  sourceKind: SourceKind;
 }
 
 interface Props {
@@ -36,51 +54,70 @@ interface Props {
 }
 
 /**
- * Lists every screening session the user owns and lets them pull formulation
- * names straight into the sample grid, keeping a link back to the bench row.
+ * Lists the user's screening sessions or tLNP batches and pulls formulation
+ * names straight into the sample grid, keeping a link back to the source row.
+ *
+ * Both sources yield BenchFormulations — a tLNP sample extends that type — so
+ * everything below the source switch is shared.
  */
 export default function FormulationPicker({
   open,
   onOpenChange,
   onPick,
 }: Props) {
+  const [source, setSource] = useState<SourceKind>("screening_session");
   const [sessions, setSessions] = useState<LnpSavedItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedSource, setLoadedSource] = useState<SourceKind | null>(null);
   const [sessionId, setSessionId] = useState<string>("");
   const [query, setQuery] = useState("");
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (kind: SourceKind) => {
     setLoading(true);
     try {
-      const rows = await listAllItems("screening_session");
+      const rows = await listAllItems(kind);
       const real = rows.filter((r) => !r.is_folder);
       setSessions(real);
       setSessionId((prev) =>
         prev && real.some((r) => r.id === prev) ? prev : real[0]?.id ?? ""
       );
-      setLoaded(true);
+      setLoadedSource(kind);
     } catch (e) {
       console.error(e);
-      toast.error("加载配方筛选会话失败");
+      toast.error(
+        kind === "tlnp_experiment"
+          ? "加载 tLNP 批次失败"
+          : "加载配方筛选会话失败"
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Fetch on first open only — the list rarely changes mid-plate-read, and a
-  // refresh button covers the case where it does.
+  // Fetch on first open of each source — the list rarely changes mid-plate-read,
+  // and a refresh button covers the case where it does.
   useEffect(() => {
-    if (open && !loaded) void load();
-  }, [open, loaded, load]);
+    if (open && loadedSource !== source) void load(source);
+  }, [open, loadedSource, source, load]);
+
+  function selectSource(kind: SourceKind) {
+    if (kind === source) return;
+    setSource(kind);
+    setSessions([]);
+    setSessionId("");
+    setChecked(new Set());
+    setQuery("");
+  }
 
   const activeSession = sessions.find((s) => s.id === sessionId) ?? null;
 
-  const formulations: BenchFormulation[] = useMemo(
-    () => (activeSession ? parseBenchSession(activeSession.data).formulations : []),
-    [activeSession]
-  );
+  const formulations: BenchFormulation[] = useMemo(() => {
+    if (!activeSession) return [];
+    return source === "tlnp_experiment"
+      ? parseTlnpExperiment(activeSession.data).prep.samples
+      : parseBenchSession(activeSession.data).formulations;
+  }, [activeSession, source]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -126,6 +163,7 @@ export default function FormulationPicker({
         sessionName: activeSession.name,
         formulationId: f.id,
         name: f.name || "(未命名)",
+        sourceKind: source,
       }));
     if (picks.length === 0) {
       toast.error("请至少勾选一个配方");
@@ -147,6 +185,23 @@ export default function FormulationPicker({
         </DialogHeader>
 
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
+            {SOURCES.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => selectSource(s.key)}
+                className={`rounded-md border px-3 py-1 text-xs transition-colors ${
+                  source === s.key
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-input text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <select
               className="flex h-8 min-w-48 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
@@ -154,7 +209,11 @@ export default function FormulationPicker({
               onChange={(e) => selectSession(e.target.value)}
               disabled={sessions.length === 0}
             >
-              {sessions.length === 0 && <option value="">没有筛选会话</option>}
+              {sessions.length === 0 && (
+                <option value="">
+                  {source === "tlnp_experiment" ? "没有 tLNP 批次" : "没有筛选会话"}
+                </option>
+              )}
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -165,7 +224,7 @@ export default function FormulationPicker({
               size="sm"
               variant="outline"
               className="h-8 text-xs"
-              onClick={() => void load()}
+              onClick={() => void load(source)}
               disabled={loading}
             >
               {loading ? (
@@ -196,9 +255,11 @@ export default function FormulationPicker({
             ) : visible.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 {sessions.length === 0
-                  ? "还没有配方筛选会话 —— 先到「配方筛选（批量）」标签页建立一个。"
+                  ? SOURCES.find((s) => s.key === source)!.empty
                   : formulations.length === 0
-                    ? "该筛选会话还没有加入配方。"
+                    ? source === "tlnp_experiment"
+                      ? "该批次还没有添加样品。"
+                      : "该筛选会话还没有加入配方。"
                     : "没有符合搜索条件的配方。"}
               </p>
             ) : (
