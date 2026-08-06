@@ -19,6 +19,7 @@ import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
 import { moduleFilled } from "@/lib/calculations/tlnp-experiment";
 import BatchSidebar from "./batch-sidebar";
 import ModuleNav, { type ModuleKey } from "./module-nav";
+import ModulePrep from "./module-prep";
 import { useTlnpBatch } from "./use-tlnp-batch";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
@@ -217,7 +218,17 @@ export default function TlnpWorkbench() {
                 filled={filled}
               />
 
-              <ModulePlaceholder module={moduleParam} />
+              {moduleParam === "1" ? (
+                <ModulePrep
+                  data={data}
+                  update={update}
+                  batchName={batch.name}
+                  createdAt={batch.created_at}
+                  updatedAt={batch.updated_at}
+                />
+              ) : (
+                <ModulePlaceholder module={moduleParam} />
+              )}
             </>
           )}
         </div>

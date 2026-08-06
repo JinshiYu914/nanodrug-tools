@@ -81,9 +81,12 @@ export function useTlnpBatch(): TlnpBatchState {
     }
 
     pendingRef.current = { id: batch.id, data };
-    setSaving(true);
     let cancelled = false;
+    // `saving` flips inside the timer rather than here: setting state
+    // synchronously in an effect body cascades a render on every keystroke, and
+    // the indicator is more honest showing only while the write is in flight.
     const timer = setTimeout(() => {
+      setSaving(true);
       void flush().finally(() => {
         if (!cancelled) setSaving(false);
       });
