@@ -21,6 +21,8 @@ import BatchSidebar from "./batch-sidebar";
 import ModuleNav, { type ModuleKey } from "./module-nav";
 import ModulePrep from "./module-prep";
 import ModuleConjugation from "./module-conjugation";
+import ModulePurification from "./module-purification";
+import ModuleAssay from "./module-assay";
 import { useTlnpBatch } from "./use-tlnp-batch";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
@@ -229,6 +231,10 @@ export default function TlnpWorkbench() {
                 />
               ) : moduleParam === "2" ? (
                 <ModuleConjugation data={data} update={update} />
+              ) : moduleParam === "3" ? (
+                <ModulePurification data={data} update={update} />
+              ) : moduleParam === "4" ? (
+                <ModuleAssay data={data} update={update} />
               ) : (
                 <ModulePlaceholder module={moduleParam} />
               )}
