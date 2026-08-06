@@ -59,8 +59,8 @@ export default function ResetPasswordPage() {
       <div className="flex min-h-[80vh] items-center justify-center px-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-success-subtle">
+              <CheckCircle2 className="h-6 w-6 text-success" />
             </div>
             <CardTitle>密码已重置</CardTitle>
             <CardDescription>

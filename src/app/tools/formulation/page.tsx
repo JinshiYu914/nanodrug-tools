@@ -148,7 +148,7 @@ export default function FormulationPage() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                合计: <span className={Math.abs(parseFloat(dmsoPercent || "0") + parseFloat(peg300Percent || "0") + parseFloat(tween80Percent || "0") + parseFloat(waterPercent || "0") - 100) > 0.1 ? "text-destructive font-medium" : "text-green-600 dark:text-green-400 font-medium"}>
+                合计: <span className={Math.abs(parseFloat(dmsoPercent || "0") + parseFloat(peg300Percent || "0") + parseFloat(tween80Percent || "0") + parseFloat(waterPercent || "0") - 100) > 0.1 ? "text-destructive font-medium" : "text-success font-medium"}>
                   {(parseFloat(dmsoPercent || "0") + parseFloat(peg300Percent || "0") + parseFloat(tween80Percent || "0") + parseFloat(waterPercent || "0")).toFixed(1)}%
                 </span>
               </p>

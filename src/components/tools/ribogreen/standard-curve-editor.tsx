@@ -206,14 +206,14 @@ export default function StandardCurveEditor({
           </div>
 
           {!fit.valid && (
-            <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <p className="flex items-start gap-1.5 text-xs text-warning">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               至少需要 2 个启用且填写完整的标准点才能拟合。
             </p>
           )}
 
           {negThreshold !== null && (
-            <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <p className="flex items-start gap-1.5 text-xs text-warning">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 截距为负：读数低于{" "}

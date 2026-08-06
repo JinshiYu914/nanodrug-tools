@@ -435,7 +435,7 @@ export function LigationCalc() {
           autoFocus
           onKeyDown={(e) => { if (e.key === "Enter") confirmRename(); if (e.key === "Escape") cancelRename(); }}
         />
-        <button className="p-0.5 text-green-600 hover:text-green-700" onClick={confirmRename}><Check className="h-2.5 w-2.5" /></button>
+        <button className="p-0.5 text-success hover:text-success/70" onClick={confirmRename}><Check className="h-2.5 w-2.5" /></button>
         <button className="p-0.5 text-muted-foreground hover:text-destructive" onClick={cancelRename}><X className="h-2.5 w-2.5" /></button>
       </div>
     );
@@ -523,18 +523,18 @@ export function LigationCalc() {
           {result && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between rounded-md bg-blue-50 px-3 py-2 text-sm dark:bg-blue-950/30">
+                <div className="flex items-center justify-between rounded-md bg-chart-1/12 px-3 py-2 text-sm">
                   <span className="font-medium">Vector</span>
                   <span className="font-mono font-bold">{result.vectorVolume} µL</span>
                 </div>
                 {result.fragments.map((f) => (
-                  <div key={f.name} className="flex items-center justify-between rounded-md bg-green-50 px-3 py-2 text-sm dark:bg-green-950/30">
+                  <div key={f.name} className="flex items-center justify-between rounded-md bg-chart-2/12 px-3 py-2 text-sm">
                     <div><span className="font-medium">{f.name}</span><span className="ml-1.5 text-xs text-muted-foreground">({f.moles})</span></div>
                     <span className="font-mono font-bold">{f.volume} µL</span>
                   </div>
                 ))}
                 {result.enzymes.map((e) => (
-                  <div key={e.name} className="flex items-center justify-between rounded-md bg-purple-50 px-3 py-2 text-sm dark:bg-purple-950/30">
+                  <div key={e.name} className="flex items-center justify-between rounded-md bg-chart-3/12 px-3 py-2 text-sm">
                     <span className="font-medium">{e.name}</span>
                     <span className="font-mono font-bold">{e.volume} µL</span>
                   </div>
@@ -652,7 +652,7 @@ export function LigationCalc() {
                       onClick={() => toggleFolder(folder.id)}
                     >
                       {expandedFolders.has(folder.id) ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                      {expandedFolders.has(folder.id) ? <FolderOpen className="h-3 w-3 shrink-0 text-amber-500" /> : <Folder className="h-3 w-3 shrink-0 text-amber-500" />}
+                      {expandedFolders.has(folder.id) ? <FolderOpen className="h-3 w-3 shrink-0 text-warning" /> : <Folder className="h-3 w-3 shrink-0 text-warning" />}
                       {renamingId === folder.id ? (
                         <div className="flex-1 ml-0.5"><RenameInput /></div>
                       ) : (
@@ -677,7 +677,7 @@ export function LigationCalc() {
                         style={{ paddingLeft: 14 }}
                         onClick={() => { if (renamingId !== rec.id) loadRecord(rec); }}
                       >
-                        <FileText className="h-3 w-3 shrink-0 text-blue-500 ml-0.5" />
+                        <FileText className="h-3 w-3 shrink-0 text-info ml-0.5" />
                         {renamingId === rec.id ? (
                           <div className="flex-1 ml-0.5"><RenameInput /></div>
                         ) : (
@@ -705,7 +705,7 @@ export function LigationCalc() {
                     style={{ paddingLeft: 14 }}
                     onClick={() => { if (renamingId !== rec.id) loadRecord(rec); }}
                   >
-                    <FileText className="h-3 w-3 shrink-0 text-blue-500 ml-0.5" />
+                    <FileText className="h-3 w-3 shrink-0 text-info ml-0.5" />
                     {renamingId === rec.id ? (
                       <div className="flex-1 ml-0.5"><RenameInput /></div>
                     ) : (

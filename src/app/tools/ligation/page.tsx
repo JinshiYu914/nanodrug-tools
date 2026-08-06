@@ -223,12 +223,12 @@ export default function LigationPage() {
             {result && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-md bg-blue-50 px-3 py-2 text-sm dark:bg-blue-950/30">
+                  <div className="flex items-center justify-between rounded-md bg-chart-1/12 px-3 py-2 text-sm">
                     <span className="font-medium">Vector</span>
                     <span className="font-mono font-bold">{result.vectorVolume} µL</span>
                   </div>
                   {result.fragments.map((f) => (
-                    <div key={f.name} className="flex items-center justify-between rounded-md bg-green-50 px-3 py-2 text-sm dark:bg-green-950/30">
+                    <div key={f.name} className="flex items-center justify-between rounded-md bg-chart-2/12 px-3 py-2 text-sm">
                       <div>
                         <span className="font-medium">{f.name}</span>
                         <span className="ml-2 text-xs text-muted-foreground">({f.moles})</span>

@@ -15,9 +15,9 @@ export default function LnpWorkflow() {
       {/* Horizontal flow diagram */}
       <div className="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-2">
         {/* Step 1: Lipid Mix */}
-        <div className="flex-1 rounded-lg border-2 border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-2">
+        <div className="flex-1 rounded-lg border-2 border-pillar-lnp/40 bg-pillar-lnp-subtle p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-pillar-lnp text-primary-foreground text-xs font-bold">
               1
             </div>
             <h4 className="text-sm font-semibold">配制 Lipid Mix（脂相）</h4>
@@ -36,9 +36,9 @@ export default function LnpWorkflow() {
         </div>
 
         {/* Step 2: Aqueous Phase */}
-        <div className="flex-1 rounded-lg border-2 border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-2">
+        <div className="flex-1 rounded-lg border-2 border-pillar-utr/40 bg-pillar-utr-subtle p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-pillar-utr text-primary-foreground text-xs font-bold">
               2
             </div>
             <h4 className="text-sm font-semibold">配制水相 (Aqueous)</h4>
@@ -55,9 +55,9 @@ export default function LnpWorkflow() {
         </div>
 
         {/* Step 3: Rapid Mixing */}
-        <div className="flex-1 rounded-lg border-2 border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-950/20 p-4 space-y-2">
+        <div className="flex-1 rounded-lg border-2 border-accent-utility/35 bg-accent-utility-subtle p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-500 text-white text-xs font-bold">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-utility text-primary-foreground text-xs font-bold">
               3
             </div>
             <h4 className="text-sm font-semibold">快速混合</h4>
@@ -74,9 +74,9 @@ export default function LnpWorkflow() {
         </div>
 
         {/* Step 4: LNP */}
-        <div className="flex-1 rounded-lg border-2 border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20 p-4 space-y-2">
+        <div className="flex-1 rounded-lg border-2 border-pillar-disease/40 bg-pillar-disease-subtle p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white text-xs font-bold">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-pillar-disease text-primary-foreground text-xs font-bold">
               4
             </div>
             <h4 className="text-sm font-semibold">后处理与表征</h4>

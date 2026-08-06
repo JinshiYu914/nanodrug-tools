@@ -87,11 +87,27 @@ corepack pnpm@10 build
 
 ## 4. 配色与语言残留检查
 
-硬编码调色板（class 字符串没法用 lint 规则可靠捕获），结果应接近于零：
+硬编码调色板（class 字符串没法用 lint 规则可靠捕获）。**当前结果应为零**，扫描已在 2026-08-06 做完：
 
 ```bash
-grep -rnoE '\b(text|bg|border|from|to|via|ring)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]{2,3}' src/components src/app
+grep -rnoE '\b(text|bg|border|from|to|via|ring|fill|stroke)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-[0-9]{2,3}' src/components src/app
 ```
+
+新代码要按**语义**选 token，不是按颜色像什么。两类不能混：
+
+| 语义 | Token | 例子 |
+|---|---|---|
+| 通过 / 有效 / 结果高亮 | `success` `success-subtle` `success-foreground` | 摩尔比合计 = 100%、校正已应用 |
+| 超范围 / 需要注意 | `warning` …-subtle …-foreground | 读数超出标准曲线量程 |
+| 提示 / 补充说明 | `info` …-subtle …-foreground | 「以上计算基于…」这类说明块 |
+| 错误 / 阻断 | `destructive`（shadcn 自带） | 摩尔比总和必须为 100% |
+| **分类**（不是状态） | `pillar-lnp`（脂相）· `pillar-utr`（水相）· `pillar-disease` · `accent-utility` · `chart-1..5` | 工作流四个步骤、水相/脂相圆点、连接反应里的 Vector/Insert/Enzyme 行 |
+
+最后一行是关键：**分类用途绝不能借用状态色**。琥珀色一旦同时表示「超量程」和「脂相」，
+这两个含义在同一个页面里就都失效了。`--pillar-lnp` = 有机相 / `--pillar-utr` = 水相
+这层对应关系在 `globals.css` 里就是这么定义的，照着用。
+
+`-subtle` 系列自带明暗两套值，所以**不要再写 `dark:` 变体** —— 写了就是把暗色模式重新写死一遍。
 
 中文残留（注释里有中文没问题，**字符串字面量里不行**）：
 

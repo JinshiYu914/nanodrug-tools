@@ -280,7 +280,7 @@ export default function SampleGrid({
                     def.type === "number" ? "font-mono" : ""
                   } ${
                     flagged
-                      ? "border-amber-500 text-amber-600 dark:text-amber-400"
+                      ? "border-warning text-warning"
                       : ""
                   }`;
 
@@ -379,7 +379,7 @@ export default function SampleGrid({
                   计算结果
                   {corr.applied &&
                     (corrected ? (
-                      <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500">
+                      <Badge className="bg-success text-success-foreground hover:bg-success/90">
                         已按标准品校正 ×{corr.factor.toFixed(3)}
                       </Badge>
                     ) : (
@@ -411,7 +411,7 @@ export default function SampleGrid({
                   key={label}
                   className={
                     key
-                      ? `${KEY_BG} ${corrected ? "border-l-2 border-l-emerald-500" : ""}`
+                      ? `${KEY_BG} ${corrected ? "border-l-2 border-l-success" : ""}`
                       : ""
                   }
                 >
@@ -436,7 +436,7 @@ export default function SampleGrid({
                         key={r.id}
                         className={`px-2 py-1.5 text-right font-mono text-xs ${
                           negative
-                            ? "text-amber-600 dark:text-amber-400"
+                            ? "text-warning"
                             : emphasize
                               ? "text-sm font-semibold text-primary"
                               : ""
@@ -534,8 +534,8 @@ export default function SampleGrid({
             </div>
 
             {corr.applied ? (
-              <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50/50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/20">
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-success/35 bg-success-subtle px-3 py-2">
+                <p className="text-xs text-success">
                   校正系数{" "}
                   <span className="font-mono font-semibold">
                     {corr.factor.toFixed(4)}
@@ -554,7 +554,7 @@ export default function SampleGrid({
                 </Button>
               </div>
             ) : (
-              <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <p className="flex items-start gap-1.5 text-xs text-warning">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {corr.reason === "no-sample" && "请选择一个标准品样本。"}
                 {corr.reason === "no-known" && "请填写标准品的已知浓度（需大于 0）。"}
@@ -571,12 +571,12 @@ export default function SampleGrid({
       </div>
 
       {warnings.length > 0 && (
-        <div className="rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-400">
+        <div className="rounded-md border border-warning/35 bg-warning-subtle p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-warning">
             <AlertTriangle className="h-4 w-4" />
             结果可能不准确
           </p>
-          <ul className="mt-1.5 space-y-0.5 text-xs text-amber-700 dark:text-amber-400">
+          <ul className="mt-1.5 space-y-0.5 text-xs text-warning">
             {warnings.map((w, i) => (
               <li key={i}>· {w}</li>
             ))}
@@ -590,7 +590,7 @@ export default function SampleGrid({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">
               {copied ? (
-                <CheckCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <CheckCheck className="h-4 w-4 text-success" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}

@@ -67,6 +67,7 @@
   --color-pillar-disease: var(--pillar-disease);
   --color-pillar-disease-subtle: var(--pillar-disease-subtle);
   --color-accent-utility: var(--accent-utility);
+  --color-accent-utility-foreground: var(--accent-utility-foreground);
   --color-accent-utility-subtle: var(--accent-utility-subtle);
   --color-highlight: var(--highlight);
 
@@ -129,6 +130,7 @@
   --pillar-disease: oklch(0.65 0.19 355);
   --pillar-disease-subtle: oklch(0.95 0.03 355);
   --accent-utility: oklch(0.66 0.14 275);
+  --accent-utility-foreground: oklch(0.99 0.005 275);
   --accent-utility-subtle: oklch(0.95 0.03 275);
   --highlight: oklch(0.86 0.16 92);
 
@@ -191,6 +193,7 @@
   --pillar-utr: oklch(0.72 0.12 188);
   --pillar-disease: oklch(0.72 0.17 355);
   --accent-utility: oklch(0.74 0.13 275);
+  --accent-utility-foreground: oklch(0.2 0.05 275);
   --highlight: oklch(0.82 0.15 92);
 
   /* Dark `-subtle` values sit just off --card and carry very little chroma.

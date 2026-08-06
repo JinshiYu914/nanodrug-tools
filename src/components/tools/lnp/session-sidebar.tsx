@@ -360,9 +360,9 @@ function TreeRow({
         >
           {node.is_folder ? (
             isOpen ? (
-              <FolderOpen className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+              <FolderOpen className="h-3.5 w-3.5 text-warning shrink-0" />
             ) : (
-              <Folder className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+              <Folder className="h-3.5 w-3.5 text-warning shrink-0" />
             )
           ) : (
             <FlaskConical className="h-3.5 w-3.5 text-primary shrink-0" />

@@ -190,7 +190,7 @@ export function FormulationCalc() {
               <span
                 className={
                   solventValid
-                    ? "font-medium text-green-600 dark:text-green-400"
+                    ? "font-medium text-success"
                     : "font-medium text-destructive"
                 }
               >

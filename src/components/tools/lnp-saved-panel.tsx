@@ -588,9 +588,9 @@ function TreeItemRow({
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
           {expanded ? (
-            <FolderOpen className="h-3 w-3 shrink-0 text-amber-500" />
+            <FolderOpen className="h-3 w-3 shrink-0 text-warning" />
           ) : (
-            <Folder className="h-3 w-3 shrink-0 text-amber-500" />
+            <Folder className="h-3 w-3 shrink-0 text-warning" />
           )}
           {renamingId === node.id ? (
             <div className="flex items-center gap-0.5 flex-1 ml-0.5" onClick={(e) => e.stopPropagation()}>
@@ -601,7 +601,7 @@ function TreeItemRow({
                 autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") onRenameConfirm(); if (e.key === "Escape") onRenameCancel(); }}
               />
-              <button className="p-0.5 text-green-600 hover:text-green-700" onClick={(e) => { e.stopPropagation(); onRenameConfirm(); }}><Check className="h-2.5 w-2.5" /></button>
+              <button className="p-0.5 text-success hover:text-success/70" onClick={(e) => { e.stopPropagation(); onRenameConfirm(); }}><Check className="h-2.5 w-2.5" /></button>
               <button className="p-0.5 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onRenameCancel(); }}><X className="h-2.5 w-2.5" /></button>
             </div>
           ) : (
@@ -686,7 +686,7 @@ function TreeItemRow({
         <span className="text-[9px] text-muted-foreground w-3 text-right shrink-0">
           {displayIdx}
         </span>
-        <FileText className="h-3 w-3 shrink-0 text-blue-500 ml-0.5" />
+        <FileText className="h-3 w-3 shrink-0 text-info ml-0.5" />
         {renamingId === node.id ? (
           <div className="flex items-center gap-0.5 flex-1 ml-0.5" onClick={(e) => e.stopPropagation()}>
             <Input
@@ -696,7 +696,7 @@ function TreeItemRow({
               autoFocus
               onKeyDown={(e) => { if (e.key === "Enter") onRenameConfirm(); if (e.key === "Escape") onRenameCancel(); }}
             />
-            <button className="p-0.5 text-green-600 hover:text-green-700" onClick={(e) => { e.stopPropagation(); onRenameConfirm(); }}><Check className="h-2.5 w-2.5" /></button>
+            <button className="p-0.5 text-success hover:text-success/70" onClick={(e) => { e.stopPropagation(); onRenameConfirm(); }}><Check className="h-2.5 w-2.5" /></button>
             <button className="p-0.5 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onRenameCancel(); }}><X className="h-2.5 w-2.5" /></button>
           </div>
         ) : (

@@ -45,8 +45,8 @@ export default function ForgotPasswordPage() {
       <div className="flex min-h-[80vh] items-center justify-center px-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-              <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-info-subtle">
+              <Mail className="h-6 w-6 text-info" />
             </div>
             <CardTitle>邮件已发送</CardTitle>
             <CardDescription>
