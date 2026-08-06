@@ -3,6 +3,7 @@
 import { Beaker, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Chip from "@/components/tools/tlnp/chip";
 import {
   DIALYSIS_OPTIONS,
   MIXING_OPTIONS,
@@ -17,31 +18,6 @@ const POST_OPTIONS: { key: PostProcessKey; label: string }[] = [
   { key: "dialysis", label: "透析" },
   { key: "ultrafiltration", label: "超滤" },
 ];
-
-/** Pill button — selected state carries the primary tint, same as the tabs. */
-function Chip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-        active
-          ? "border-primary bg-primary/10 font-medium text-primary"
-          : "border-input text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
 
 interface Props {
   value: BenchMethod;

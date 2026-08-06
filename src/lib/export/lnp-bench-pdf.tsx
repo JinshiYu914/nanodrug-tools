@@ -6,7 +6,6 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
   pdf,
 } from "@react-pdf/renderer";
 import {
@@ -15,24 +14,7 @@ import {
   type BenchFormulation,
 } from "@/lib/calculations/lnp-bench";
 import { formatVolume } from "@/lib/calculations/lnp-formula";
-
-// Register CJK fonts (copied from @fontsource/noto-sans-sc into /public/fonts).
-let fontsRegistered = false;
-function ensureFonts() {
-  if (fontsRegistered) return;
-  try {
-    Font.register({
-      family: "NotoSansSC",
-      fonts: [
-        { src: "/fonts/NotoSansSC-Regular.woff", fontWeight: 400 },
-        { src: "/fonts/NotoSansSC-Bold.woff", fontWeight: 700 },
-      ],
-    });
-    fontsRegistered = true;
-  } catch (e) {
-    console.warn("CJK font registration failed; CJK characters may not render", e);
-  }
-}
+import { ensureCjkFonts } from "./pdf-fonts";
 
 const styles = StyleSheet.create({
   page: {
@@ -394,7 +376,7 @@ export async function exportBenchToPdf(
   formulations: BenchFormulation[]
 ): Promise<void> {
   if (formulations.length === 0) return;
-  ensureFonts();
+  ensureCjkFonts();
 
   const blob = await pdf(
     <BenchDocument

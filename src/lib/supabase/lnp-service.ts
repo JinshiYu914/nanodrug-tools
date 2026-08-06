@@ -5,7 +5,8 @@ export type LnpItemType =
   | "preparation"
   | "screening_session"
   | "ribogreen_curve"
-  | "ribogreen_result";
+  | "ribogreen_result"
+  | "tlnp_experiment";
 
 export interface LnpSavedItem {
   id: string;
