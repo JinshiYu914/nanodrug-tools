@@ -449,27 +449,33 @@ export function DoseRoute() {
                   setLiveTopic((current) => (current === figure.topic.slug ? null : current))
                 }
                 className={cn(
-                  "card-in mt-4 flex flex-col gap-6 rounded-2xl border-2 bg-card p-5 transition-[border-color] duration-300 lg:flex-row lg:items-center lg:justify-between lg:gap-10 motion-reduce:transition-none",
+                  "card-in mt-4 rounded-2xl border-2 bg-card p-5 transition-[border-color] duration-300 motion-reduce:transition-none",
                   liveTopic === figure.topic.slug ? activeTone.ringSoft : "border-ink/12"
                 )}
                 style={{ animationDelay: `${90 + active.topics.length * 55}ms` }}
               >
-                <figcaption className="shrink-0 lg:w-[28%]">
-                  <p className="font-mono text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {/* Caption on top, drawing centred under it — one column at
+                    every width. Side-by-side was tried and does not survive a
+                    full-width card: a 28% caption against a capped drawing
+                    pinned to the far edge leaves a void between them and a
+                    second one under the caption, since three lines of text
+                    cannot fill a row as tall as the picture. */}
+                <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="font-mono text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     Figure
-                  </p>
-                  <p className="mt-1.5 font-display text-[0.95rem] font-bold leading-snug">
+                  </span>
+                  <span className="font-display text-[0.95rem] font-bold leading-snug">
                     {figure.topic.title}
-                  </p>
-                  <p className="mt-1 text-[0.8rem] text-muted-foreground">
+                  </span>
+                  <span className="text-[0.8rem] text-muted-foreground">
                     {figure.topic.tagline}
-                  </p>
+                  </span>
                 </figcaption>
-                {/* Capped: left to fill the row this drawing renders ~730px
-                    wide and 420px tall on a 400:232 viewBox, which makes the
-                    figure outweigh the four programmes it illustrates. 30rem
+                {/* Capped: left to fill the card this drawing renders ~1060px
+                    wide and 615px tall on a 400:232 viewBox, which makes the
+                    figure outweigh the four programmes it illustrates. 34rem
                     keeps the 11.5px labels legible without that. */}
-                <div className="mx-auto w-full min-w-0 max-w-[30rem] text-ink lg:mx-0">
+                <div className="mx-auto mt-4 w-full min-w-0 max-w-[34rem] text-ink">
                   <figure.Diagram variant="full" />
                 </div>
               </figure>
