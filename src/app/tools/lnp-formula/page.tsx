@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Dna,
   RotateCcw,
@@ -28,7 +28,9 @@ import FormulationWorkspace, {
   createDefaultWorkspaceValue,
   type WorkspaceValue,
 } from "@/components/tools/lnp/formulation-workspace";
-import ScreeningMode from "@/components/tools/lnp/screening-mode";
+import ScreeningMode, {
+  type ScreeningFocus,
+} from "@/components/tools/lnp/screening-mode";
 import RibogreenMode from "@/components/tools/ribogreen/ribogreen-mode";
 import {
   computeBenchFormulation,
@@ -52,6 +54,31 @@ type TabKey = "normal" | "screening" | "ribogreen";
 export default function LnpFormulaPage() {
   // Controlled so the workflow diagram can be hidden on the RiboGreen tab.
   const [tab, setTab] = useState<TabKey>("normal");
+
+  // ── Cross-tab links between a screening formulation and its EE record ──
+  // Each request carries a token so asking for the same target twice still
+  // fires; the receiving tab clears it once handled.
+  const [screeningFocus, setScreeningFocus] = useState<ScreeningFocus | null>(
+    null
+  );
+  const [ribogreenRecord, setRibogreenRecord] = useState<{
+    itemId: string;
+    token: number;
+  } | null>(null);
+  const linkToken = useRef(0);
+
+  const openFormulation = useCallback(
+    (sessionId: string, formulationId: string) => {
+      setScreeningFocus({ sessionId, formulationId, token: ++linkToken.current });
+      setTab("screening");
+    },
+    []
+  );
+
+  const openRibogreenRecord = useCallback((itemId: string) => {
+    setRibogreenRecord({ itemId, token: ++linkToken.current });
+    setTab("ribogreen");
+  }, []);
 
   // ── Normal mode state (mirrors the old single-formulation page) ──
   const [normal, setNormal] = useState<WorkspaceValue>(
@@ -388,7 +415,11 @@ export default function LnpFormulaPage() {
               </CardContent>
             </Card>
           ) : (
-            <ScreeningMode />
+            <ScreeningMode
+              focus={screeningFocus}
+              onFocusHandled={() => setScreeningFocus(null)}
+              onOpenRibogreenRecord={openRibogreenRecord}
+            />
           )}
         </TabsContent>
 
@@ -397,7 +428,12 @@ export default function LnpFormulaPage() {
             between tabs — Radix unmounts inactive TabsContent by default. */}
         <TabsContent value="ribogreen" className="space-y-0" forceMount>
           <div className={tab === "ribogreen" ? "" : "hidden"}>
-            <RibogreenMode active={tab === "ribogreen"} />
+            <RibogreenMode
+              active={tab === "ribogreen"}
+              onOpenFormulation={openFormulation}
+              pendingRecord={ribogreenRecord}
+              onPendingRecordHandled={() => setRibogreenRecord(null)}
+            />
           </div>
         </TabsContent>
       </Tabs>

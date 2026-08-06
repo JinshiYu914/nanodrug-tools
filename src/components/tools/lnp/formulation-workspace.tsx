@@ -29,7 +29,12 @@ import {
   getAminesPerMolecule,
   type LipidEntry,
 } from "@/lib/calculations/lnp-formula";
-import type { BenchPrepParams } from "@/lib/calculations/lnp-bench";
+import {
+  createDefaultMethod,
+  type BenchMethod,
+  type BenchPrepParams,
+} from "@/lib/calculations/lnp-bench";
+import MethodPicker from "./method-picker";
 
 const num = (s: string) => {
   const n = parseFloat(s);
@@ -47,6 +52,8 @@ export interface WorkspaceValue {
    *  microfluidic syringe dead volume. Ignored in screening mode. */
   extraLipidPhase?: boolean;
   prep: BenchPrepParams;
+  /** Screening mode only: how this batch is made. Ignored in normal mode. */
+  method?: BenchMethod;
 }
 
 export function createDefaultWorkspaceValue(): WorkspaceValue {
@@ -66,6 +73,7 @@ export function createDefaultWorkspaceValue(): WorkspaceValue {
       naType: "mRNA",
       aminesPerMolecule: "1",
     },
+    method: createDefaultMethod(),
   };
 }
 
@@ -746,6 +754,18 @@ export default function FormulationWorkspace({
                   )}
               </div>
             </div>
+
+            {isScreening && (
+              <>
+                <Separator className="my-6" />
+                <MethodPicker
+                  value={value.method ?? createDefaultMethod()}
+                  onChange={(method) =>
+                    onChange((prev) => ({ ...prev, method }))
+                  }
+                />
+              </>
+            )}
 
             {footerSlot && (
               <>

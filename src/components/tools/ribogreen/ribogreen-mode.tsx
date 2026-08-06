@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { LineChart, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,13 +50,32 @@ import {
   type SampleRow,
 } from "@/lib/calculations/ribogreen";
 import type { InstrumentKey } from "@/lib/calculations/ribogreen-presets";
-import { createItem, updateItemData } from "@/lib/supabase/lnp-service";
+import {
+  createItem,
+  getItem,
+  updateItemData,
+  type LnpSavedItem,
+} from "@/lib/supabase/lnp-service";
 
 // Server renders "", the client renders today's date. Doing this through
 // useSyncExternalStore keeps hydration honest without a setState-in-effect.
 const noopSubscribe = () => () => {};
 
-export default function RibogreenMode({ active }: { active: boolean }) {
+interface RibogreenModeProps {
+  active: boolean;
+  /** Jump to the screening tab and focus the formulation a sample came from. */
+  onOpenFormulation?: (sessionId: string, formulationId: string) => void;
+  /** Record the screening tab asked us to load, e.g. from a bench card link. */
+  pendingRecord?: { itemId: string; token: number } | null;
+  onPendingRecordHandled?: () => void;
+}
+
+export default function RibogreenMode({
+  active,
+  onOpenFormulation,
+  pendingRecord,
+  onPendingRecordHandled,
+}: RibogreenModeProps) {
   // This component is force-mounted so the sample grid survives tab switches,
   // which would otherwise make the records panel hit Supabase on every page
   // load. Latch on first activation instead: mount it once the tab has been
@@ -106,6 +132,54 @@ export default function RibogreenMode({ active }: { active: boolean }) {
   );
 
   const display = showCorrected ? batch : rawBatch;
+
+  /** Shared by the records panel and the "open from screening bench" link. */
+  const applyRecord = useCallback(
+    (data: Record<string, unknown>, item: LnpSavedItem): boolean => {
+      const parsed = parseResultData(data);
+      if (!parsed) {
+        toast.error("实验记录数据格式不正确");
+        return false;
+      }
+      setInstrument(parsed.instrument);
+      setCurves(cloneCurvePair(parsed.curves));
+      setRows(parsed.rows.map((r) => ({ ...r })));
+      setCorrection({ ...parsed.correction });
+      setDateOverride(parsed.experimentDate || todayISO());
+      setShowCorrected(true);
+      setActiveResultId(item.id);
+      setActiveResultName(item.name);
+      return true;
+    },
+    []
+  );
+
+  // The screening tab can hand us a record id to open — fetch and load it.
+  useEffect(() => {
+    if (!pendingRecord) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const item = await getItem(pendingRecord.itemId);
+        if (cancelled) return;
+        if (!item?.data) {
+          toast.error("找不到这条实验记录");
+          return;
+        }
+        if (applyRecord(item.data, item)) {
+          toast.success(`已载入「${item.name}」`);
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error(describeError(e));
+      } finally {
+        if (!cancelled) onPendingRecordHandled?.();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingRecord, applyRecord, onPendingRecordHandled]);
 
   function handleInstrumentChange(key: InstrumentKey) {
     if (key === instrument) return;
@@ -262,6 +336,7 @@ export default function RibogreenMode({ active }: { active: boolean }) {
             onReset={handleReset}
             onSave={openSaveDialog}
             onExportXlsx={handleExportXlsx}
+            onOpenFormulation={onOpenFormulation}
           />
         </CardContent>
       </Card>
@@ -271,21 +346,7 @@ export default function RibogreenMode({ active }: { active: boolean }) {
       <RibogreenRecordsPanel
         refreshToken={recordsRefresh}
         activeItemId={activeResultId}
-        onLoad={(data, item) => {
-          const parsed = parseResultData(data);
-          if (!parsed) {
-            toast.error("实验记录数据格式不正确");
-            return;
-          }
-          setInstrument(parsed.instrument);
-          setCurves(cloneCurvePair(parsed.curves));
-          setRows(parsed.rows.map((r) => ({ ...r })));
-          setCorrection({ ...parsed.correction });
-          setDateOverride(parsed.experimentDate || todayISO());
-          setShowCorrected(true);
-          setActiveResultId(item.id);
-          setActiveResultName(item.name);
-        }}
+        onLoad={applyRecord}
       />
       )}
 
