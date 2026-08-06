@@ -23,6 +23,8 @@ import ModulePrep from "./module-prep";
 import ModuleConjugation from "./module-conjugation";
 import ModulePurification from "./module-purification";
 import ModuleAssay from "./module-assay";
+import BatchReport from "./batch-report";
+import BatchCompare from "./batch-compare";
 import { useTlnpBatch } from "./use-tlnp-batch";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
@@ -235,8 +237,15 @@ export default function TlnpWorkbench() {
                 <ModulePurification data={data} update={update} />
               ) : moduleParam === "4" ? (
                 <ModuleAssay data={data} update={update} />
+              ) : moduleParam === "report" ? (
+                <BatchReport
+                  batchName={batch.name}
+                  createdAt={batch.created_at}
+                  updatedAt={batch.updated_at}
+                  data={data}
+                />
               ) : (
-                <ModulePlaceholder module={moduleParam} />
+                <BatchCompare activeBatchId={batch.id} />
               )}
             </>
           )}
@@ -372,28 +381,6 @@ function Field({
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
     </div>
-  );
-}
-
-// ─── Temporary module placeholder ─────────────────────────
-
-const MODULE_TITLES: Record<ModuleKey, string> = {
-  "1": "LNP 制备",
-  "2": "偶联反应",
-  "3": "LNP 纯化",
-  "4": "体内外实验",
-  report: "总览与导出",
-  compare: "批次对比",
-};
-
-function ModulePlaceholder({ module }: { module: ModuleKey }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{MODULE_TITLES[module]}</CardTitle>
-        <CardDescription>该模块正在搭建中。</CardDescription>
-      </CardHeader>
-    </Card>
   );
 }
 
