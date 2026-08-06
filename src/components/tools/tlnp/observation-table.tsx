@@ -30,12 +30,12 @@ function isBad(r: ObservationRow): boolean {
 interface Props {
   rows: ObservationRow[];
   onChange: (next: ObservationRow[]) => void;
-  /** Product id → display name, for the 产物 dropdown. */
-  products: { id: string; name: string }[];
+  /** System id → display name, for the 反应体系 dropdown. */
+  systems: { id: string; name: string }[];
 }
 
-/** 肉眼观测 for the unpurified tLNP — turbidity and precipitate per product. */
-export default function ObservationTable({ rows, onChange, products }: Props) {
+/** 肉眼观测 for the unpurified tLNP — turbidity and precipitate per system. */
+export default function ObservationTable({ rows, onChange, systems }: Props) {
   const patch = (id: string, next: Partial<ObservationRow>) =>
     onChange(rows.map((r) => (r.id === id ? { ...r, ...next } : r)));
 
@@ -64,7 +64,9 @@ export default function ObservationTable({ rows, onChange, products }: Props) {
         <table className="w-full min-w-[40rem] border-collapse text-xs">
           <thead>
             <tr className="border-b bg-muted/40">
-              <th className="min-w-40 px-2 py-2 text-left font-medium">产物</th>
+              <th className="min-w-40 px-2 py-2 text-left font-medium">
+                反应体系
+              </th>
               <th className="w-28 px-2 py-2 text-left font-medium">浑浊度</th>
               <th className="w-28 px-2 py-2 text-left font-medium">沉淀</th>
               <th className="px-2 py-2 text-left font-medium">备注</th>
@@ -81,12 +83,12 @@ export default function ObservationTable({ rows, onChange, products }: Props) {
               >
                 <td className="px-2 py-1.5">
                   <select
-                    value={r.productId}
-                    onChange={(e) => patch(r.id, { productId: e.target.value })}
+                    value={r.systemId}
+                    onChange={(e) => patch(r.id, { systemId: e.target.value })}
                     className="flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-sm"
                   >
                     <option value="">（未关联）</option>
-                    {products.map((p) => (
+                    {systems.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -133,7 +135,7 @@ export default function ObservationTable({ rows, onChange, products }: Props) {
                     value={r.note}
                     onChange={(e) => patch(r.id, { note: e.target.value })}
                     placeholder="例如 静置 1 h 后底部有絮状物"
-                    className="h-7 text-xs"
+                    className="h-7 px-2 text-xs"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">

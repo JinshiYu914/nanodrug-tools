@@ -75,21 +75,6 @@ export const PREP_PARAM_PRESETS: ParamPreset[] = [
   },
 ];
 
-export const PURIFICATION_PARAM_PRESETS: ParamPreset[] = [
-  {
-    id: "purifyBuffer",
-    label: "洗脱 buffer",
-    options: ["PBS pH 7.4", "PBS pH 6.8 with EDTA", "HEPES pH 7.4", "TBS"],
-    placeholder: "自定义 buffer",
-  },
-  {
-    id: "purifyOperator",
-    label: "操作人",
-    options: [],
-    placeholder: "姓名或缩写",
-  },
-];
-
 export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
   {
     id: "cellLine",

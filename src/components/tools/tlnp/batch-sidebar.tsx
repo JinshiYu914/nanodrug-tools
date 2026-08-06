@@ -216,7 +216,10 @@ export default function BatchSidebar({
 
   return (
     <>
-      <Card className="lg:sticky lg:top-6">
+      {/* top-20 clears the sticky site navbar (h-16) plus a gutter. At top-6
+          the card slides under the header as soon as the page scrolls, and its
+          own heading is the first thing to disappear. */}
+      <Card className="lg:sticky lg:top-20">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm font-semibold">我的实验批次</CardTitle>
@@ -242,7 +245,7 @@ export default function BatchSidebar({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="max-h-[70vh] space-y-0.5 overflow-y-auto pt-0">
+        <CardContent className="max-h-[calc(100vh-12rem)] space-y-0.5 overflow-y-auto pt-0">
           {loading ? (
             <p className="py-6 text-center text-xs text-muted-foreground">
               加载中...

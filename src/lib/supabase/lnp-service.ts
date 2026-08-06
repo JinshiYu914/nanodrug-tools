@@ -6,7 +6,9 @@ export type LnpItemType =
   | "screening_session"
   | "ribogreen_curve"
   | "ribogreen_result"
-  | "tlnp_experiment";
+  | "tlnp_experiment"
+  | "protein"
+  | "cl4b_preset";
 
 export interface LnpSavedItem {
   id: string;

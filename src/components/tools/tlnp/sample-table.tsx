@@ -108,8 +108,13 @@ export default function SampleTable({
 
   return (
     <div className="space-y-3">
+      {/* The min width has to cover every declared column width put together.
+          When it doesn't, the table shrinks the numeric columns past their
+          padding and the values scroll out of sight inside their own inputs —
+          which is exactly what adding the fifth lipid column did to N/P and
+          RNA. Recount this when a column is added. */}
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[52rem] border-collapse text-xs">
+        <table className="w-full min-w-[66rem] border-collapse text-xs">
           <thead>
             <tr className="border-b bg-muted/40">
               <th className="w-8 px-2 py-2 text-left font-medium">#</th>
@@ -127,8 +132,8 @@ export default function SampleTable({
                 </th>
               ))}
               <th className="w-16 px-2 py-2 text-left font-medium">合计</th>
-              <th className="w-16 px-2 py-2 text-left font-medium">N/P</th>
-              <th className="w-20 px-2 py-2 text-left font-medium">FRR</th>
+              <th className="w-20 px-2 py-2 text-left font-medium">N/P</th>
+              <th className="w-24 px-2 py-2 text-left font-medium">FRR</th>
               <th className="w-24 px-2 py-2 text-left font-medium">
                 RNA (µg)
               </th>
@@ -184,7 +189,7 @@ export default function SampleTable({
                         })
                       }
                       inputMode="decimal"
-                      className="h-7 font-mono text-xs"
+                      className="h-7 px-2 font-mono text-xs"
                     />
                   </td>
                   <td className="px-2 py-1.5">
@@ -219,7 +224,7 @@ export default function SampleTable({
                         })
                       }
                       inputMode="decimal"
-                      className="h-7 font-mono text-xs"
+                      className="h-7 px-2 font-mono text-xs"
                     />
                   </td>
                   <td className="px-2 py-1.5">

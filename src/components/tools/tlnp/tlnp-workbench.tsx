@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Boxes, Clock, Loader2, LogIn, Plus, Save } from "lucide-react";
+import {
+  Boxes,
+  Clock,
+  FileText,
+  Loader2,
+  LogIn,
+  Plus,
+  Save,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,8 +24,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser } from "@/lib/supabase/use-user";
-import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
-import { moduleFilled } from "@/lib/calculations/tlnp-experiment";
+import {
+  getItem,
+  listAllItems,
+  type LnpSavedItem,
+} from "@/lib/supabase/lnp-service";
+import {
+  createSystemCharacterization,
+  moduleFilled,
+} from "@/lib/calculations/tlnp-experiment";
+import { extractLink } from "./use-ribogreen-link";
 import BatchSidebar from "./batch-sidebar";
 import ModuleNav, { type ModuleKey } from "./module-nav";
 import ModulePrep from "./module-prep";
@@ -95,6 +112,92 @@ export default function TlnpWorkbench() {
     },
     [pathname, router]
   );
+
+  // ── Coming back from the RiboGreen calculator ──
+  //
+  // The trip out sent sample names over; `?import=` names the record that came
+  // of it. Every sample or system the record measured gets linked in one go,
+  // which is the whole point of having gone there rather than typing numbers.
+  const importParam = searchParams.get("import");
+  const importAttempted = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!authed || !importParam) return;
+    // Wait for the batch itself, or there is nothing to write the links into.
+    if (!batch || batch.id !== batchParam) return;
+    if (importAttempted.current === importParam) return;
+    importAttempted.current = importParam;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const record = await getItem(importParam);
+        if (cancelled) return;
+        if (!record) {
+          toast.error("找不到这条 RiboGreen 记录");
+          return;
+        }
+
+        let linked = 0;
+        update((prev) => {
+          const samples = prev.prep.samples.map((s) => {
+            const link = extractLink(record, s.id);
+            if (!link) return s;
+            linked++;
+            return { ...s, ee: { ...s.ee, link } };
+          });
+
+          const systems = [...prev.purification.results.systems];
+          for (const sys of prev.conjugation.systems) {
+            const link = extractLink(record, sys.id);
+            if (!link) continue;
+            linked++;
+            const at = systems.findIndex((r) => r.systemId === sys.id);
+            if (at >= 0) {
+              systems[at] = { ...systems[at], ee: { ...systems[at].ee, link } };
+            } else {
+              const fresh = createSystemCharacterization(sys.id);
+              systems.push({ ...fresh, ee: { ...fresh.ee, link } });
+            }
+          }
+
+          return {
+            ...prev,
+            prep: { ...prev.prep, samples },
+            purification: {
+              ...prev.purification,
+              results: { ...prev.purification.results, systems },
+            },
+          };
+        });
+
+        if (linked > 0) {
+          toast.success(`已导入 ${linked} 个样品的检测结果`);
+        } else {
+          toast.error("这条记录里没有本批次的样品");
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error("导入检测结果失败");
+      } finally {
+        // Drop the param either way, so a refresh doesn't re-import and the
+        // URL goes back to being just "which batch, which module".
+        if (!cancelled) writeUrl(batchParam, moduleParam);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authed,
+    importParam,
+    batch,
+    batchParam,
+    moduleParam,
+    update,
+    writeUrl,
+  ]);
 
   const handleSelectBatch = useCallback(
     (item: LnpSavedItem) => {
@@ -215,6 +318,8 @@ export default function TlnpWorkbench() {
                 update={update}
                 saving={saving}
                 lastSavedAt={lastSavedAt}
+                activeModule={moduleParam}
+                onModuleChange={handleModuleChange}
               />
 
               <ModuleNav
@@ -227,6 +332,7 @@ export default function TlnpWorkbench() {
                 <ModulePrep
                   data={data}
                   update={update}
+                  batchId={batch.id}
                   batchName={batch.name}
                   createdAt={batch.created_at}
                   updatedAt={batch.updated_at}
@@ -234,7 +340,11 @@ export default function TlnpWorkbench() {
               ) : moduleParam === "2" ? (
                 <ModuleConjugation data={data} update={update} />
               ) : moduleParam === "3" ? (
-                <ModulePurification data={data} update={update} />
+                <ModulePurification
+                  data={data}
+                  update={update}
+                  batchId={batch.id}
+                />
               ) : moduleParam === "4" ? (
                 <ModuleAssay data={data} update={update} />
               ) : moduleParam === "report" ? (
@@ -293,12 +403,16 @@ function BatchHeader({
   update,
   saving,
   lastSavedAt,
+  activeModule,
+  onModuleChange,
 }: {
   batch: LnpSavedItem;
   data: ReturnType<typeof useTlnpBatch>["data"];
   update: ReturnType<typeof useTlnpBatch>["update"];
   saving: boolean;
   lastSavedAt: Date | null;
+  activeModule: ModuleKey;
+  onModuleChange: (key: ModuleKey) => void;
 }) {
   const setMeta = (patch: Partial<typeof data.meta>) =>
     update((prev) => ({ ...prev, meta: { ...prev.meta, ...patch } }));
@@ -306,28 +420,47 @@ function BatchHeader({
   return (
     <Card>
       <CardContent className="space-y-3 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <Boxes className="h-4 w-4 shrink-0 text-primary" />
             <h2 className="truncate text-base font-semibold">{batch.name}</h2>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              创建 {formatDateTime(batch.created_at)}
-            </span>
-            {saving ? (
-              <span className="flex items-center gap-1 text-primary">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                保存中
-              </span>
-            ) : lastSavedAt ? (
-              <span className="flex items-center gap-1 text-success">
-                <Save className="h-3 w-3" />
-                已保存 {formatTime(lastSavedAt)}
-              </span>
-            ) : null}
+
+          {/* 总览与导出 / 批次对比 belong to the batch, not to the four-step
+              flow — they read across every module rather than being a fifth
+              step, so they sit in the batch card instead of after the arrows. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <HeaderTab
+              active={activeModule === "report"}
+              onClick={() => onModuleChange("report")}
+              icon={<FileText className="h-3.5 w-3.5" />}
+              label="总览与导出"
+            />
+            <HeaderTab
+              active={activeModule === "compare"}
+              onClick={() => onModuleChange("compare")}
+              icon={<Boxes className="h-3.5 w-3.5" />}
+              label="批次对比"
+            />
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            创建 {formatDateTime(batch.created_at)}
+          </span>
+          {saving ? (
+            <span className="flex items-center gap-1 text-primary">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              保存中
+            </span>
+          ) : lastSavedAt ? (
+            <span className="flex items-center gap-1 text-success">
+              <Save className="h-3 w-3" />
+              已保存 {formatTime(lastSavedAt)}
+            </span>
+          ) : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -366,6 +499,33 @@ function BatchHeader({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function HeaderTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors ${
+        active
+          ? "border-primary bg-primary/10 font-medium text-primary"
+          : "border-input text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

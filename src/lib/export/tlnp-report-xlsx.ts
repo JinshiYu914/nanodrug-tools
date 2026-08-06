@@ -9,11 +9,18 @@ import {
 import { describeMethod } from "@/lib/calculations/lnp-bench";
 import {
   computeConjugationDose,
-  productName,
+  findProtein,
+  linkerNmolPerUgRna,
+  proteinName,
+  systemName,
 } from "@/lib/calculations/tlnp-conjugation";
 import { describeParams } from "@/lib/calculations/tlnp-params";
 import {
   resolveEe,
+  TEM_LABELS,
+  type EeResult,
+  type DlsResult,
+  type TemFlag,
   summarizeBatch,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
@@ -56,6 +63,12 @@ function overviewRows(
     ["负责人", d.meta.operator],
     ["实验目的", d.meta.objective],
     [],
+    ["LNP 制备日期", d.prep.design.date],
+    ["偶联反应日期", d.conjugation.design.date],
+    ["LNP 纯化日期", d.purification.design.date],
+    ["体外实验日期", d.assay.invitro.design.date],
+    ["体内实验日期", d.assay.invivo.design.date],
+    [],
     ["创建时间", formatIso(createdAt)],
     ["最近更新", formatIso(updatedAt)],
     ["导出时间", formatNow()],
@@ -68,8 +81,8 @@ function overviewRows(
     ["纯化方式", s.purificationLabel],
     [],
     ["样品数", s.sampleCount],
-    ["反应条件数", s.conditionCount],
-    ["tLNP 产物数", s.productCount],
+    ["蛋白数", s.proteinCount],
+    ["反应体系数", s.systemCount],
     ["平均粒径 (nm)", n2(s.meanSize_nm)],
     ["平均 PDI", n2(s.meanPdi)],
     ["平均包封率 (%)", n2(s.meanEe_percent)],
@@ -77,9 +90,21 @@ function overviewRows(
   ];
 }
 
-function characterizationRows(d: TlnpExperimentData): Cell[][] {
+interface CharacterizationEntry {
+  name: string;
+  ee: EeResult;
+  dls: DlsResult;
+  tem: TemFlag;
+  note: string;
+}
+
+/** Shared by 表征结果 and 纯化后表征 — the same measurements, twice. */
+function characterizationRows(
+  entries: CharacterizationEntry[],
+  subjectLabel: string
+): Cell[][] {
   const head: Cell[] = [
-    "样品",
+    subjectLabel,
     "浓度 (ng/µL)",
     "体积 (µL)",
     "包封率 (%)",
@@ -87,71 +112,102 @@ function characterizationRows(d: TlnpExperimentData): Cell[][] {
     "粒径 (nm)",
     "PDI",
     "Zeta (mV)",
+    "TEM",
     "数据来源",
     "备注",
   ];
-  const body = d.prep.samples.map((s, i) => {
-    const ee = resolveEe(s.ee);
+  const body = entries.map((e) => {
+    const ee = resolveEe(e.ee);
     return [
-      s.name || `样品 ${i + 1}`,
+      e.name,
       n2(ee.conc),
       n2(ee.volume),
       n2(ee.ee),
       n2(ee.yield_),
-      s.dls.size_nm,
-      s.dls.pdi,
-      s.dls.zeta_mV,
+      e.dls.size_nm,
+      e.dls.pdi,
+      e.dls.zeta_mV,
+      e.tem === "" ? "" : TEM_LABELS[e.tem],
       ee.source === "ribogreen"
-        ? `RiboGreen: ${s.ee.link?.itemName ?? ""}`
+        ? `RiboGreen: ${e.ee.link?.itemName ?? ""}`
         : ee.source === "manual"
           ? "手动录入"
           : "",
-      s.resultNote,
+      e.note,
     ] as Cell[];
   });
   return [head, ...body];
 }
 
-function conditionRows(d: TlnpExperimentData): Cell[][] {
+function prepCharacterization(d: TlnpExperimentData): Cell[][] {
+  return characterizationRows(
+    d.prep.samples.map((s, i) => ({
+      name: s.name || `样品 ${i + 1}`,
+      ee: s.ee,
+      dls: s.dls,
+      tem: s.tem,
+      note: s.resultNote,
+    })),
+    "样品"
+  );
+}
+
+function purifiedCharacterization(d: TlnpExperimentData): Cell[][] {
+  return characterizationRows(
+    d.conjugation.systems.map((sys, i) => {
+      const r = d.purification.results.systems.find(
+        (x) => x.systemId === sys.id
+      );
+      return {
+        name: systemName(sys, i),
+        ee: r?.ee ?? { link: null, manual: { conc_ng_uL: "", volume_uL: "", ee_percent: "", yield_percent: "" } },
+        dls: r?.dls ?? { size_nm: "", pdi: "", zeta_mV: "", instrument: "", note: "" },
+        tem: r?.tem ?? "",
+        note: r?.note ?? "",
+      };
+    }),
+    "反应体系"
+  );
+}
+
+function proteinRows(d: TlnpExperimentData): Cell[][] {
+  const head: Cell[] = ["蛋白", "分子量 (Da)", "浓度", "单位", "备注"];
+  const body = d.conjugation.proteins.map((p, i) => [
+    proteinName(p, i),
+    p.mw,
+    p.conc,
+    p.concUnit === "uM" ? "µM" : "mg/mL",
+    p.note,
+  ] as Cell[]);
+  return [head, ...body];
+}
+
+/** One row per reaction system: the design, the dose and how it looked. */
+function systemRows(d: TlnpExperimentData): Cell[][] {
   const head: Cell[] = [
-    "条件名称",
-    "linker",
+    "反应体系",
+    "LNP 来源",
+    "LNP 浓度 (ng/µL)",
+    "LNP 体积 (µL)",
+    "linker (mol %)",
+    "linker (nmol/µg RNA)",
     "蛋白",
-    "蛋白 MW (Da)",
-    "蛋白浓度",
-    "摩尔比 (蛋白:LNP)",
-    "LNP 取用 (µL)",
+    "linker:蛋白",
+    "RNA 投入 (µg)",
+    "linker (nmol)",
+    "蛋白 (nmol)",
     "蛋白取用 (µL)",
-    "反应总体积 (µL)",
+    "反应 buffer (µL)",
+    "总体积 (µL)",
+    "反应 buffer",
     "温度",
     "时间",
     "摇床",
+    "浑浊度",
+    "沉淀",
+    "观测备注",
     "备注",
   ];
-  const body = d.conjugation.conditions.map((c) => {
-    const dose = computeConjugationDose(c);
-    return [
-      c.name,
-      c.linker,
-      c.proteinName,
-      c.proteinMW,
-      `${c.proteinConc} ${c.proteinConcUnit === "uM" ? "µM" : "mg/mL"}`,
-      c.targetMolarRatio,
-      n2(dose.lnpVolume_uL),
-      n2(dose.proteinVolume_uL),
-      n2(dose.totalVolume_uL),
-      c.temperature,
-      c.duration,
-      c.shaking,
-      c.note,
-    ] as Cell[];
-  });
-  return [head, ...body];
-}
-
-/** The graph as an adjacency table — one row per 样品 → 条件 edge. */
-function productRows(d: TlnpExperimentData): Cell[][] {
-  const head: Cell[] = ["tLNP 产物", "样品", "反应条件", "浑浊度", "沉淀", "观测备注"];
   const turbidity: Record<string, string> = {
     clear: "澄清",
     slight: "微浑",
@@ -164,28 +220,79 @@ function productRows(d: TlnpExperimentData): Cell[][] {
     heavy: "大量",
     "": "",
   };
-  const body = d.conjugation.products.map((p) => {
-    const sample = d.prep.samples.find((s) => s.id === p.sampleId);
-    const cond = d.conjugation.conditions.find((c) => c.id === p.conditionId);
+  const body = d.conjugation.systems.map((s, i) => {
+    const protein = findProtein(d.conjugation.proteins, s.proteinId);
+    const dose = computeConjugationDose(s, protein);
     const obs = d.conjugation.results.observations.find(
-      (o) => o.productId === p.id
+      (o) => o.systemId === s.id
     );
+    const sample = d.prep.samples.find((x) => x.id === s.sampleId);
     return [
-      productName(p, sample?.name ?? "", cond?.name ?? ""),
-      sample?.name ?? "",
-      cond?.name ?? "",
+      systemName(s, i),
+      sample?.name ?? s.lnpName,
+      s.lnpConc,
+      s.lnpVolume,
+      s.linkerPercent,
+      n2(linkerNmolPerUgRna(s.basis, s.linkerPercent)),
+      proteinName(protein),
+      s.molarRatio ? `1:${s.molarRatio}` : "",
+      n2(dose.rnaMass_ug),
+      n2(dose.linker_nmol),
+      n2(dose.protein_nmol),
+      n2(dose.proteinVolume_uL),
+      n2(dose.bufferVolume_uL),
+      n2(dose.totalVolume_uL),
+      s.reactionBuffer,
+      s.temperature,
+      s.duration,
+      s.shaking,
       turbidity[obs?.turbidity ?? ""] ?? "",
       precipitate[obs?.precipitate ?? ""] ?? "",
       obs?.note ?? "",
+      s.note,
     ] as Cell[];
   });
   return [head, ...body];
 }
 
+function purificationRows(d: TlnpExperimentData): Cell[][] {
+  const g = d.purification.design;
+  const rows: Cell[][] = [
+    ["纯化日期", g.date],
+    ["纯化方式", g.method === "" ? "" : g.method],
+    ["操作人", g.operator],
+  ];
+  if (g.method === "cl4b") {
+    rows.push(
+      ["柱长 (cm)", g.cl4b.columnLength],
+      ["柱径 (cm)", g.cl4b.columnDiameter],
+      ["流速 (mL/min)", g.cl4b.flowRate],
+      ["洗脱 buffer", g.cl4b.buffer],
+      ["超滤浓缩", g.cl4b.ultrafiltrationConcentrate ? "是" : "否"]
+    );
+  } else if (g.method === "ultrafiltration") {
+    rows.push(
+      ["截留分子量 (kDa)", g.ultrafiltration.mwco],
+      ["次数", g.ultrafiltration.cycles],
+      ["备注", g.ultrafiltration.note]
+    );
+  } else if (g.method === "dialysis") {
+    rows.push(
+      ["截留分子量 (kDa)", g.dialysis.mwco],
+      ["时长", g.dialysis.duration],
+      ["buffer", g.dialysis.buffer]
+    );
+  }
+  rows.push([], ["TEM 图片", d.purification.results.tem.imageUrl]);
+  rows.push(["TEM 放大倍数", d.purification.results.tem.magnification]);
+  rows.push(["TEM 形貌", d.purification.results.tem.note]);
+  return rows;
+}
+
 function chromatogramRows(d: TlnpExperimentData): Cell[][] {
   const out: Cell[][] = [];
   for (const c of d.purification.chromatograms) {
-    out.push([c.name, c.sourceName, c.note]);
+    out.push([c.name, c.note]);
     out.push([c.xLabel, ...c.channels.map((ch) => ch.label)]);
     for (const p of c.points) {
       out.push([p.x, ...p.y.map((v) => (v === null ? "" : v))]);
@@ -244,9 +351,15 @@ export function exportTlnpToXlsx(
     );
   }
 
-  XLSX.utils.book_append_sheet(wb, sheet(characterizationRows(d)), "表征结果");
-  XLSX.utils.book_append_sheet(wb, sheet(conditionRows(d)), "反应条件");
-  XLSX.utils.book_append_sheet(wb, sheet(productRows(d)), "tLNP 产物");
+  XLSX.utils.book_append_sheet(wb, sheet(prepCharacterization(d)), "表征结果");
+  XLSX.utils.book_append_sheet(wb, sheet(proteinRows(d)), "蛋白");
+  XLSX.utils.book_append_sheet(wb, sheet(systemRows(d)), "反应体系");
+  XLSX.utils.book_append_sheet(wb, sheet(purificationRows(d)), "纯化方法");
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheet(purifiedCharacterization(d)),
+    "纯化后表征"
+  );
   XLSX.utils.book_append_sheet(wb, sheet(chromatogramRows(d)), "层析原始数据");
   XLSX.utils.book_append_sheet(wb, sheet(assayRows(d)), "体内外结果");
   XLSX.utils.book_append_sheet(wb, sheet(discussionRows(d)), "讨论记录");
@@ -277,8 +390,8 @@ export function buildCompareSheet(entries: CompareEntry[]): XLSX.WorkSheet {
     "溶剂置换",
     "纯化方式",
     "样品数",
-    "条件数",
-    "产物数",
+    "蛋白数",
+    "反应体系数",
     "平均粒径 (nm)",
     "平均 PDI",
     "平均包封率 (%)",
@@ -299,8 +412,8 @@ export function buildCompareSheet(entries: CompareEntry[]): XLSX.WorkSheet {
       s.solventLabel || describeMethod(data.prep.design.solvent.method),
       s.purificationLabel,
       s.sampleCount,
-      s.conditionCount,
-      s.productCount,
+      s.proteinCount,
+      s.systemCount,
       n2(s.meanSize_nm),
       n2(s.meanPdi),
       n2(s.meanEe_percent),

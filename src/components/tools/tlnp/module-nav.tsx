@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Boxes,
   Columns3,
-  FileText,
   FlaskConical,
   Link2,
   Microscope,
@@ -47,7 +46,7 @@ const STEPS: {
     key: "2",
     index: 2,
     label: "偶联反应",
-    hint: "条件与连线",
+    hint: "体系与加样",
     icon: Link2,
     border: "border-accent-utility/35",
     bg: "bg-accent-utility-subtle",
@@ -87,8 +86,7 @@ interface Props {
 
 export default function ModuleNav({ active, onChange, filled }: Props) {
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:gap-1.5">
+    <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:gap-1.5">
         {STEPS.map((step, i) => {
           const Icon = step.icon;
           const isActive = active === step.key;
@@ -132,49 +130,6 @@ export default function ModuleNav({ active, onChange, filled }: Props) {
             </div>
           );
         })}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <TabButton
-          active={active === "report"}
-          onClick={() => onChange("report")}
-          icon={<FileText className="h-3.5 w-3.5" />}
-          label="总览与导出"
-        />
-        <TabButton
-          active={active === "compare"}
-          onClick={() => onChange("compare")}
-          icon={<Boxes className="h-3.5 w-3.5" />}
-          label="批次对比"
-        />
-      </div>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors ${
-        active
-          ? "border-primary bg-primary/10 font-medium text-primary"
-          : "border-input text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

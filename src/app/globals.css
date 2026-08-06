@@ -281,49 +281,6 @@
     box-shadow: var(--sketch-shadow-hover);
   }
 
-  /* The tLNP conjugation canvas.
-     @xyflow/react ships its own palette in hex. Remapping its `--xy-*-default`
-     variables onto our tokens is what keeps the canvas following light/dark
-     with the rest of the page — the library's own `colorMode` prop only picks
-     between its two hardcoded themes, neither of which is ours.
-     Node bodies are custom components (flow-nodes.tsx) and never touch these. */
-  .tlnp-flow {
-    --xy-edge-stroke-default: var(--border);
-    --xy-edge-stroke-selected-default: var(--primary);
-    --xy-edge-stroke-width-default: 1.5;
-    --xy-connectionline-stroke-default: var(--primary);
-    --xy-connectionline-stroke-width-default: 1.5;
-    --xy-edge-label-background-color-default: var(--card);
-    --xy-edge-label-color-default: var(--muted-foreground);
-
-    --xy-background-color-default: var(--muted);
-    --xy-background-pattern-dots-color-default: var(--border);
-
-    --xy-handle-background-color-default: var(--primary);
-    --xy-handle-border-color-default: var(--card);
-
-    --xy-selection-background-color-default: color-mix(
-      in oklch,
-      var(--primary) 12%,
-      transparent
-    );
-    --xy-selection-border-default: 1px dotted var(--primary);
-
-    --xy-controls-button-background-color-default: var(--card);
-    --xy-controls-button-background-color-hover-default: var(--muted);
-    --xy-controls-button-color-default: var(--foreground);
-    --xy-controls-button-color-hover-default: var(--primary);
-    --xy-controls-button-border-color-default: var(--border);
-    --xy-controls-box-shadow-default: none;
-
-    /* Our nodes bring their own surface; blank these so the library's default
-       card doesn't show through behind them. */
-    --xy-node-background-color-default: transparent;
-    --xy-node-border-default: none;
-    --xy-node-boxshadow-hover-default: none;
-    --xy-node-boxshadow-selected-default: none;
-    --xy-node-color-default: var(--foreground);
-  }
 }
 
 /* ---------------------------------------------------------------------------

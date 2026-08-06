@@ -26,7 +26,9 @@ import { formatVolume } from "@/lib/calculations/lnp-formula";
 import { computeBenchFormulation } from "@/lib/calculations/lnp-bench";
 import {
   computeConjugationDose,
-  productName,
+  findProtein,
+  proteinName,
+  systemName,
 } from "@/lib/calculations/tlnp-conjugation";
 import {
   PURIFICATION_METHOD_LABELS,
@@ -374,6 +376,14 @@ export function TlnpReportDocument({
             ["批次编号", d.meta.batchCode],
             ["实验日期", d.meta.experimentDate],
             ["负责人", d.meta.operator],
+            // Each module records its own date; the batch spans all of them.
+            ["制备日期", d.prep.design.date],
+            ["偶联日期", d.conjugation.design.date],
+            ["纯化日期", d.purification.design.date],
+            [
+              "体内外日期",
+              d.assay.invitro.design.date || d.assay.invivo.design.date,
+            ],
             ["阳离子脂质", s.cationicLipid],
             ["反应 linker", s.linker],
             ["Cargo", s.cargo],
@@ -441,37 +451,65 @@ export function TlnpReportDocument({
 
         {/* ── 2 偶联反应 ── */}
         <Section title="2  偶联反应">
-          {d.conjugation.conditions.length === 0 ? (
-            <Text style={styles.empty}>（没有反应条件）</Text>
+          {d.conjugation.proteins.length > 0 && (
+            <View style={styles.table}>
+              <Row
+                head
+                widths={["34%", "22%", "22%", "22%"]}
+                cells={["蛋白", "分子量 (Da)", "浓度", "备注"]}
+              />
+              {d.conjugation.proteins.map((p, i) => (
+                <Row
+                  key={p.id}
+                  widths={["34%", "22%", "22%", "22%"]}
+                  cells={[
+                    proteinName(p, i),
+                    p.mw || "--",
+                    p.conc
+                      ? `${p.conc} ${p.concUnit === "uM" ? "µM" : "mg/mL"}`
+                      : "--",
+                    p.note || "--",
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
+          {d.conjugation.systems.length === 0 ? (
+            <Text style={styles.empty}>（没有反应体系）</Text>
           ) : (
             <View style={styles.table}>
               <Row
                 head
-                widths={["18%", "18%", "12%", "13%", "13%", "13%", "13%"]}
+                widths={["16%", "14%", "12%", "12%", "12%", "12%", "10%", "12%"]}
                 cells={[
-                  "条件",
+                  "反应体系",
                   "蛋白",
-                  "摩尔比",
+                  "linker:蛋白",
                   "LNP (µL)",
                   "蛋白 (µL)",
+                  "buffer (µL)",
+                  "总 (µL)",
                   "温度/时间",
-                  "摇床",
                 ]}
               />
-              {d.conjugation.conditions.map((c) => {
-                const dose = computeConjugationDose(c);
+              {d.conjugation.systems.map((sys, i) => {
+                const protein = findProtein(d.conjugation.proteins, sys.proteinId);
+                const dose = computeConjugationDose(sys, protein);
                 return (
                   <Row
-                    key={c.id}
-                    widths={["18%", "18%", "12%", "13%", "13%", "13%", "13%"]}
+                    key={sys.id}
+                    widths={["16%", "14%", "12%", "12%", "12%", "12%", "10%", "12%"]}
                     cells={[
-                      c.name,
-                      c.proteinName || "--",
-                      c.targetMolarRatio || "--",
+                      systemName(sys, i),
+                      proteinName(protein) || "--",
+                      sys.molarRatio ? `1:${sys.molarRatio}` : "--",
                       formatVolume(dose.lnpVolume_uL),
                       formatVolume(dose.proteinVolume_uL),
-                      [c.temperature, c.duration].filter(Boolean).join(" / ") || "--",
-                      c.shaking || "--",
+                      formatVolume(dose.bufferVolume_uL),
+                      formatVolume(dose.totalVolume_uL),
+                      [sys.temperature, sys.duration].filter(Boolean).join(" / ") ||
+                        "--",
                     ]}
                   />
                 );
@@ -479,20 +517,16 @@ export function TlnpReportDocument({
             </View>
           )}
 
-          {d.conjugation.products.length > 0 && (
+          {d.conjugation.results.observations.length > 0 && (
             <View style={styles.table}>
               <Row
                 head
-                widths={["28%", "20%", "20%", "16%", "16%"]}
-                cells={["tLNP 产物", "样品", "条件", "浑浊度", "沉淀"]}
+                widths={["36%", "20%", "20%", "24%"]}
+                cells={["反应体系", "浑浊度", "沉淀", "观测备注"]}
               />
-              {d.conjugation.products.map((p) => {
-                const sample = d.prep.samples.find((x) => x.id === p.sampleId);
-                const cond = d.conjugation.conditions.find(
-                  (x) => x.id === p.conditionId
-                );
-                const obs = d.conjugation.results.observations.find(
-                  (o) => o.productId === p.id
+              {d.conjugation.results.observations.map((o) => {
+                const at = d.conjugation.systems.findIndex(
+                  (x) => x.id === o.systemId
                 );
                 const T: Record<string, string> = {
                   clear: "澄清",
@@ -506,14 +540,15 @@ export function TlnpReportDocument({
                 };
                 return (
                   <Row
-                    key={p.id}
-                    widths={["28%", "20%", "20%", "16%", "16%"]}
+                    key={o.id}
+                    widths={["36%", "20%", "20%", "24%"]}
                     cells={[
-                      productName(p, sample?.name ?? "", cond?.name ?? ""),
-                      sample?.name ?? "--",
-                      cond?.name ?? "--",
-                      T[obs?.turbidity ?? ""] ?? "--",
-                      P[obs?.precipitate ?? ""] ?? "--",
+                      at >= 0
+                        ? systemName(d.conjugation.systems[at], at)
+                        : "（未关联）",
+                      T[o.turbidity] ?? "--",
+                      P[o.precipitate] ?? "--",
+                      o.note || "--",
                     ]}
                   />
                 );
@@ -538,7 +573,8 @@ export function TlnpReportDocument({
                 cells.push(
                   ["柱长 × 柱径", `${p.cl4b.columnLength} × ${p.cl4b.columnDiameter} cm`],
                   ["流速", `${p.cl4b.flowRate} mL/min`],
-                  ["buffer", p.cl4b.buffer]
+                  ["buffer", p.cl4b.buffer],
+                  ["超滤浓缩", p.cl4b.ultrafiltrationConcentrate ? "是" : "否"]
                 );
               } else if (p.method === "ultrafiltration") {
                 cells.push(
@@ -552,6 +588,7 @@ export function TlnpReportDocument({
                   ["buffer", p.dialysis.buffer]
                 );
               }
+              cells.push(["操作人", p.operator], ["日期", p.date]);
               return cells.map(([label, value]) => (
                 <View key={label} style={styles.metaCell}>
                   <Text style={styles.metaLabel}>{label}</Text>
@@ -561,17 +598,43 @@ export function TlnpReportDocument({
             })()}
           </View>
 
-          {(() => {
-            const ee = resolveEe(d.purification.results.ee);
-            const dls = d.purification.results.dls;
-            if (ee.source === "none" && !dls.size_nm && !dls.pdi) return null;
-            return (
-              <Text style={styles.note}>
-                纯化后：包封率 {n(ee.ee)}% · 回收率 {n(ee.yield_)}% · 粒径{" "}
-                {dls.size_nm || "--"} nm · PDI {dls.pdi || "--"}
-              </Text>
-            );
-          })()}
+          {d.purification.results.systems.length > 0 && (
+            <View style={styles.table}>
+              <Row
+                head
+                widths={["24%", "16%", "15%", "15%", "15%", "15%"]}
+                cells={[
+                  "反应体系",
+                  "浓度 ng/µL",
+                  "包封率 %",
+                  "回收率 %",
+                  "粒径 nm",
+                  "PDI",
+                ]}
+              />
+              {d.conjugation.systems.map((sys, i) => {
+                const r = d.purification.results.systems.find(
+                  (x) => x.systemId === sys.id
+                );
+                if (!r) return null;
+                const ee = resolveEe(r.ee);
+                return (
+                  <Row
+                    key={sys.id}
+                    widths={["24%", "16%", "15%", "15%", "15%", "15%"]}
+                    cells={[
+                      systemName(sys, i),
+                      n(ee.conc, 2),
+                      n(ee.ee),
+                      n(ee.yield_),
+                      r.dls.size_nm || "--",
+                      r.dls.pdi || "--",
+                    ]}
+                  />
+                );
+              })}
+            </View>
+          )}
           <Note label="TEM" text={d.purification.results.tem.note} />
           <Note label="结果与讨论" text={d.purification.results.discussion} />
         </Section>
@@ -580,10 +643,7 @@ export function TlnpReportDocument({
             split across a page break. */}
         {d.purification.chromatograms.map((c) => (
           <View key={c.id} style={styles.section} wrap={false}>
-            <Text style={styles.figureTitle}>
-              层析图 · {c.name}
-              {c.sourceName ? ` （${c.sourceName}）` : ""}
-            </Text>
+            <Text style={styles.figureTitle}>层析图 · {c.name}</Text>
             <ChromatogramFigure c={c} />
             {c.note.trim() !== "" && <Note label="备注" text={c.note} />}
           </View>

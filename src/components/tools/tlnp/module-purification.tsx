@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Columns3,
   Image as ImageIcon,
   MessageSquare,
+  Pencil,
   Plus,
   TestTube2,
   Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -21,30 +23,50 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Chip from "./chip";
-import ParamBench from "./param-bench";
-import DlsFields from "./dls-fields";
+import ModuleDate from "./module-date";
+import Cl4bPresets from "./cl4b-presets";
 import ChromatogramImport from "./chromatogram-import";
 import ChromatogramChart from "./chromatogram-chart";
+import CharacterizationMatrix, {
+  type CharacterizationPatch,
+} from "./characterization-matrix";
+import RibogreenHandoffButton from "./ribogreen-handoff-button";
+import { extractLink, useRibogreenRecords } from "./use-ribogreen-link";
 import { genId } from "@/lib/calculations/ribogreen";
+import { systemName } from "@/lib/calculations/tlnp-conjugation";
 import {
+  createChromatogram,
+  reparseChromatogram,
+  type ParsedChromatogram,
+} from "@/lib/calculations/chromatogram";
+import {
+  createSystemCharacterization,
   PURIFICATION_METHOD_LABELS,
-  resolveEe,
   type Chromatogram,
   type PurificationMethod,
+  type SystemCharacterization,
   type TlnpExperimentData,
   type TlnpPurificationModule,
 } from "@/lib/calculations/tlnp-experiment";
 
-const METHODS: PurificationMethod[] = ["cl4b", "ultrafiltration", "dialysis"];
+const METHODS: Exclude<PurificationMethod, "">[] = [
+  "cl4b",
+  "ultrafiltration",
+  "dialysis",
+];
 
 interface Props {
   data: TlnpExperimentData;
   update: (updater: (prev: TlnpExperimentData) => TlnpExperimentData) => void;
+  batchId: string;
 }
 
-export default function ModulePurification({ data, update }: Props) {
+export default function ModulePurification({ data, update, batchId }: Props) {
   const [adding, setAdding] = useState(false);
   const pur = data.purification;
+  const systems = data.conjugation.systems;
+
+  const { records, loading, reload } = useRibogreenRecords(systems.length > 0);
 
   const setPur = (patch: (p: TlnpPurificationModule) => TlnpPurificationModule) =>
     update((prev) => ({ ...prev, purification: patch(prev.purification) }));
@@ -52,15 +74,65 @@ export default function ModulePurification({ data, update }: Props) {
   const setDesign = (patch: Partial<TlnpPurificationModule["design"]>) =>
     setPur((p) => ({ ...p, design: { ...p.design, ...patch } }));
 
-  const ee = resolveEe(pur.results.ee);
+  /**
+   * One characterization row per reaction system, created on demand.
+   *
+   * Derived rather than stored eagerly so adding a system in module 2 shows up
+   * here without a migration step, and so a deleted system's row stops being
+   * rendered without being destroyed the moment it goes.
+   */
+  const rows = useMemo(
+    () =>
+      systems.map((s, i) => {
+        const stored = pur.results.systems.find((r) => r.systemId === s.id);
+        return {
+          id: s.id,
+          name: systemName(s, i),
+          ee: stored?.ee ?? createSystemCharacterization(s.id).ee,
+          dls: stored?.dls ?? createSystemCharacterization(s.id).dls,
+          tem: stored?.tem ?? "",
+          note: stored?.note ?? "",
+        };
+      }),
+    [systems, pur.results.systems]
+  );
+
+  const patchSystemResult = (systemId: string, patch: CharacterizationPatch) =>
+    setPur((p) => {
+      const exists = p.results.systems.some((r) => r.systemId === systemId);
+      const apply = (r: SystemCharacterization): SystemCharacterization => ({
+        ...r,
+        ...(patch.ee ? { ee: patch.ee } : {}),
+        ...(patch.dls ? { dls: patch.dls } : {}),
+        ...(patch.tem !== undefined ? { tem: patch.tem } : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
+      });
+      return {
+        ...p,
+        results: {
+          ...p.results,
+          systems: exists
+            ? p.results.systems.map((r) =>
+                r.systemId === systemId ? apply(r) : r
+              )
+            : [...p.results.systems, apply(createSystemCharacterization(systemId))],
+        },
+      };
+    });
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Columns3 className="h-4 w-4 text-pillar-utr" />
-            <CardTitle className="text-base">纯化方法</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Columns3 className="h-4 w-4 text-pillar-utr" />
+              <CardTitle className="text-base">纯化方法</CardTitle>
+            </div>
+            <ModuleDate
+              value={pur.design.date}
+              onChange={(date) => setDesign({ date })}
+            />
           </div>
           <CardDescription>
             选择方法后填写对应参数。未选中的方法参数会保留，换回来时还在。
@@ -76,50 +148,82 @@ export default function ModulePurification({ data, update }: Props) {
                   setDesign({ method: pur.design.method === m ? "" : m })
                 }
               >
-                {PURIFICATION_METHOD_LABELS[m as Exclude<PurificationMethod, "">]}
+                {PURIFICATION_METHOD_LABELS[m]}
               </Chip>
             ))}
           </div>
 
           {pur.design.method === "cl4b" && (
-            <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="柱长 (cm)">
-                <NumInput
-                  value={pur.design.cl4b.columnLength}
-                  onChange={(v) =>
-                    setDesign({ cl4b: { ...pur.design.cl4b, columnLength: v } })
-                  }
-                />
-              </Field>
-              <Field label="柱径 (cm)">
-                <NumInput
-                  value={pur.design.cl4b.columnDiameter}
-                  onChange={(v) =>
-                    setDesign({
-                      cl4b: { ...pur.design.cl4b, columnDiameter: v },
-                    })
-                  }
-                />
-              </Field>
-              <Field label="流速 (mL/min)">
-                <NumInput
-                  value={pur.design.cl4b.flowRate}
-                  onChange={(v) =>
-                    setDesign({ cl4b: { ...pur.design.cl4b, flowRate: v } })
-                  }
-                />
-              </Field>
-              <Field label="洗脱 buffer">
-                <Input
-                  value={pur.design.cl4b.buffer}
+            <div className="space-y-3 rounded-lg border p-3">
+              <Cl4bPresets
+                current={{
+                  columnLength: pur.design.cl4b.columnLength,
+                  columnDiameter: pur.design.cl4b.columnDiameter,
+                  flowRate: pur.design.cl4b.flowRate,
+                  buffer: pur.design.cl4b.buffer,
+                }}
+                onApply={(p) =>
+                  setDesign({ cl4b: { ...pur.design.cl4b, ...p } })
+                }
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="柱长 (cm)">
+                  <NumInput
+                    value={pur.design.cl4b.columnLength}
+                    onChange={(v) =>
+                      setDesign({ cl4b: { ...pur.design.cl4b, columnLength: v } })
+                    }
+                  />
+                </Field>
+                <Field label="柱径 (cm)">
+                  <NumInput
+                    value={pur.design.cl4b.columnDiameter}
+                    onChange={(v) =>
+                      setDesign({
+                        cl4b: { ...pur.design.cl4b, columnDiameter: v },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="流速 (mL/min)">
+                  <NumInput
+                    value={pur.design.cl4b.flowRate}
+                    onChange={(v) =>
+                      setDesign({ cl4b: { ...pur.design.cl4b, flowRate: v } })
+                    }
+                  />
+                </Field>
+                <Field label="洗脱 buffer">
+                  <Input
+                    value={pur.design.cl4b.buffer}
+                    onChange={(e) =>
+                      setDesign({
+                        cl4b: { ...pur.design.cl4b, buffer: e.target.value },
+                      })
+                    }
+                    placeholder="例如 PBS pH 7.4"
+                    className="h-8 px-2 text-xs"
+                  />
+                </Field>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-primary"
+                  checked={pur.design.cl4b.ultrafiltrationConcentrate}
                   onChange={(e) =>
                     setDesign({
-                      cl4b: { ...pur.design.cl4b, buffer: e.target.value },
+                      cl4b: {
+                        ...pur.design.cl4b,
+                        ultrafiltrationConcentrate: e.target.checked,
+                      },
                     })
                   }
-                  className="h-8 text-xs"
                 />
-              </Field>
+                过柱后做超滤浓缩
+              </label>
             </div>
           )}
 
@@ -159,7 +263,7 @@ export default function ModulePurification({ data, update }: Props) {
                       },
                     })
                   }
-                  className="h-8 text-xs"
+                  className="h-8 px-2 text-xs"
                 />
               </Field>
             </div>
@@ -171,9 +275,7 @@ export default function ModulePurification({ data, update }: Props) {
                 <NumInput
                   value={pur.design.dialysis.mwco}
                   onChange={(v) =>
-                    setDesign({
-                      dialysis: { ...pur.design.dialysis, mwco: v },
-                    })
+                    setDesign({ dialysis: { ...pur.design.dialysis, mwco: v } })
                   }
                 />
               </Field>
@@ -188,7 +290,7 @@ export default function ModulePurification({ data, update }: Props) {
                       },
                     })
                   }
-                  className="h-8 text-xs"
+                  className="h-8 px-2 text-xs"
                 />
               </Field>
               <Field label="buffer">
@@ -202,27 +304,31 @@ export default function ModulePurification({ data, update }: Props) {
                       },
                     })
                   }
-                  className="h-8 text-xs"
+                  className="h-8 px-2 text-xs"
                 />
               </Field>
             </div>
           )}
 
-          <ParamBench
-            entries={pur.design.params}
-            onChange={(params) => setDesign({ params })}
-            title="其他纯化参数"
-          />
-
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">
-              设计备注（可选）
-            </Label>
-            <Textarea
-              value={pur.design.note}
-              onChange={(e) => setDesign({ note: e.target.value })}
-              className="min-h-16 text-sm"
-            />
+          <div className="grid gap-3 sm:grid-cols-[16rem_1fr]">
+            <Field label="操作人">
+              <Input
+                value={pur.design.operator}
+                onChange={(e) => setDesign({ operator: e.target.value })}
+                placeholder="姓名或缩写"
+                className="h-8 px-2 text-xs"
+              />
+            </Field>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground">
+                设计备注（可选）
+              </Label>
+              <Textarea
+                value={pur.design.note}
+                onChange={(e) => setDesign({ note: e.target.value })}
+                className="min-h-16 text-sm"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -231,7 +337,7 @@ export default function ModulePurification({ data, update }: Props) {
         <CardHeader>
           <CardTitle className="text-base">层析结果</CardTitle>
           <CardDescription>
-            导入纯化数据自动生成峰图。收集峰段可以标出来，会画在图上。
+            粘贴纯化数据自动生成峰图。收集峰段可以标出来，会画在图上，也会进导出的 PDF。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -259,10 +365,19 @@ export default function ModulePurification({ data, update }: Props) {
 
           {adding || pur.chromatograms.length === 0 ? (
             <ChromatogramImport
-              onImport={(c) => {
-                setPur((p) => ({ ...p, chromatograms: [...p.chromatograms, c] }));
+              onImport={(parsed, name, rawText) => {
+                setPur((p) => ({
+                  ...p,
+                  chromatograms: [
+                    ...p.chromatograms,
+                    createChromatogram(parsed, name, rawText),
+                  ],
+                }));
                 setAdding(false);
               }}
+              onCancel={
+                pur.chromatograms.length > 0 ? () => setAdding(false) : undefined
+              }
             />
           ) : (
             <Button
@@ -272,7 +387,7 @@ export default function ModulePurification({ data, update }: Props) {
               onClick={() => setAdding(true)}
             >
               <Plus className="h-3.5 w-3.5" />
-              再导入一张层析图
+              再粘贴一张层析图
             </Button>
           )}
         </CardContent>
@@ -280,108 +395,52 @@ export default function ModulePurification({ data, update }: Props) {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <TestTube2 className="h-4 w-4 text-pillar-utr" />
-            <CardTitle className="text-base">纯化后表征</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <TestTube2 className="h-4 w-4 text-pillar-utr" />
+              <CardTitle className="text-base">纯化后表征</CardTitle>
+            </div>
+            <RibogreenHandoffButton
+              batchId={batchId}
+              stage="purify"
+              disabled={systems.length === 0}
+              onRefresh={() => void reload()}
+              refreshing={loading}
+            />
           </div>
           <CardDescription>
-            纯化后的整体检测结果。逐样品的数据记录在「LNP 制备」的表征结果里。
+            一行一个反应体系，与「LNP 制备」用同一套 RiboGreen 计算 ——
+            点「输入样品数值计算」过去测完带回来，或直接填写。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2 rounded-lg border p-3">
-            <p className="text-xs font-medium">RiboGreen（纯化后）</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Field label="浓度 (ng/µL)">
-                <NumInput
-                  value={pur.results.ee.manual.conc_ng_uL}
-                  onChange={(v) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        ee: {
-                          ...p.results.ee,
-                          manual: { ...p.results.ee.manual, conc_ng_uL: v },
-                        },
-                      },
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="体积 (µL)">
-                <NumInput
-                  value={pur.results.ee.manual.volume_uL}
-                  onChange={(v) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        ee: {
-                          ...p.results.ee,
-                          manual: { ...p.results.ee.manual, volume_uL: v },
-                        },
-                      },
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="包封率 (%)">
-                <NumInput
-                  value={pur.results.ee.manual.ee_percent}
-                  onChange={(v) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        ee: {
-                          ...p.results.ee,
-                          manual: { ...p.results.ee.manual, ee_percent: v },
-                        },
-                      },
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="回收率 (%)">
-                <NumInput
-                  value={pur.results.ee.manual.yield_percent}
-                  onChange={(v) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        ee: {
-                          ...p.results.ee,
-                          manual: { ...p.results.ee.manual, yield_percent: v },
-                        },
-                      },
-                    }))
-                  }
-                />
-              </Field>
-            </div>
-            {ee.source !== "none" && (
-              <p className="font-mono text-[11px] text-muted-foreground">
-                回收 {ee.yield_ === null ? "--" : `${ee.yield_.toFixed(1)}%`} ·
-                包封 {ee.ee === null ? "--" : `${ee.ee.toFixed(1)}%`}
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-lg border p-3">
-            <DlsFields
-              value={pur.results.dls}
-              onChange={(dls) =>
-                setPur((p) => ({ ...p, results: { ...p.results, dls } }))
+          <CharacterizationMatrix
+            rows={rows}
+            onChange={patchSystemResult}
+            candidates={records}
+            recordsLoading={loading}
+            onImport={(id, record) => {
+              const link = extractLink(record, id);
+              if (!link) {
+                toast.error("该记录里找不到这个体系的读数");
+                return;
               }
-            />
-          </div>
+              const stored = pur.results.systems.find((r) => r.systemId === id);
+              patchSystemResult(id, {
+                ee: {
+                  ...(stored?.ee ?? createSystemCharacterization(id).ee),
+                  link,
+                },
+              });
+              toast.success(`已导入「${record.name}」的检测结果`);
+            }}
+            emptyHint="「偶联反应」里建立反应体系后，这里会逐个记录纯化后的表征结果。"
+          />
 
           <div className="space-y-2 rounded-lg border p-3">
             <p className="flex items-center gap-1.5 text-xs font-medium">
               <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-              TEM
+              TEM 图片
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Field label="图片链接">
@@ -397,7 +456,7 @@ export default function ModulePurification({ data, update }: Props) {
                     }))
                   }
                   placeholder="https://..."
-                  className="h-8 text-xs"
+                  className="h-8 px-2 text-xs"
                 />
               </Field>
               <Field label="放大倍数">
@@ -408,15 +467,12 @@ export default function ModulePurification({ data, update }: Props) {
                       ...p,
                       results: {
                         ...p.results,
-                        tem: {
-                          ...p.results.tem,
-                          magnification: e.target.value,
-                        },
+                        tem: { ...p.results.tem, magnification: e.target.value },
                       },
                     }))
                   }
                   placeholder="例如 50,000×"
-                  className="h-8 text-xs"
+                  className="h-8 px-2 text-xs"
                 />
               </Field>
             </div>
@@ -432,10 +488,10 @@ export default function ModulePurification({ data, update }: Props) {
                 }))
               }
               placeholder="形貌描述，例如 球形均一，未见明显聚集"
-              className="h-8 text-xs"
+              className="h-8 px-2 text-xs"
             />
             <p className="text-[11px] text-muted-foreground">
-              暂时只支持外部图片链接，直接上传会在后续版本加上。
+              哪些体系拍了 TEM 记在上表；这里放整体的图片链接与形貌描述。直接上传会在后续版本加上。
             </p>
           </div>
         </CardContent>
@@ -475,19 +531,37 @@ function ChromatogramCard({
   onChange: (next: Chromatogram) => void;
   onRemove: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+
+  function applyEdit(parsed: ParsedChromatogram, name: string, rawText: string) {
+    onChange({
+      ...reparseChromatogram(chromatogram, parsed, rawText),
+      name: name || chromatogram.name,
+    });
+    setEditing(false);
+  }
+
   return (
     <div className="space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Input
           value={chromatogram.name}
           onChange={(e) => onChange({ ...chromatogram, name: e.target.value })}
-          className="h-8 max-w-64 text-xs font-medium"
+          className="h-8 max-w-64 px-2 text-xs font-medium"
         />
         <div className="flex items-center gap-2">
           <span className="font-mono text-[11px] text-muted-foreground">
-            {chromatogram.points.length} 点 · {chromatogram.channels.length} 通道
-            {chromatogram.sourceName ? ` · ${chromatogram.sourceName}` : ""}
+            {chromatogram.points.length} 点 ·{" "}
+            {chromatogram.channels.map((c) => c.label).join(" / ") || "无通道"}
           </span>
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            title="重新编辑这组数据"
+            className="p-1 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
           <button
             type="button"
             onClick={onRemove}
@@ -499,7 +573,23 @@ function ChromatogramCard({
         </div>
       </div>
 
-      <ChromatogramChart chromatogram={chromatogram} />
+      {editing ? (
+        <ChromatogramImport
+          initialText={chromatogram.rawText}
+          initialName={chromatogram.name}
+          onImport={applyEdit}
+          onCancel={() => setEditing(false)}
+          submitLabel="用新数据替换"
+        />
+      ) : (
+        <ChromatogramChart chromatogram={chromatogram} />
+      )}
+
+      {!editing && chromatogram.rawText === "" && (
+        <p className="text-[11px] text-muted-foreground">
+          这张图导入时还没有保存原始文本，点铅笔可以重新粘贴一份。
+        </p>
+      )}
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -535,7 +625,7 @@ function ChromatogramCard({
                 })
               }
               placeholder="峰名"
-              className="h-7 w-28 text-xs"
+              className="h-7 w-28 px-2 text-xs"
             />
             <Input
               value={String(f.from)}
@@ -550,7 +640,7 @@ function ChromatogramCard({
                 })
               }
               inputMode="decimal"
-              className="h-7 w-20 font-mono text-xs"
+              className="h-7 w-20 px-2 font-mono text-xs"
             />
             <span className="text-xs text-muted-foreground">–</span>
             <Input
@@ -566,7 +656,7 @@ function ChromatogramCard({
                 })
               }
               inputMode="decimal"
-              className="h-7 w-20 font-mono text-xs"
+              className="h-7 w-20 px-2 font-mono text-xs"
             />
             <button
               type="button"
@@ -588,7 +678,7 @@ function ChromatogramCard({
         value={chromatogram.note}
         onChange={(e) => onChange({ ...chromatogram, note: e.target.value })}
         placeholder="备注"
-        className="h-7 text-xs"
+        className="h-7 px-2 text-xs"
       />
     </div>
   );
@@ -621,7 +711,7 @@ function NumInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       inputMode="decimal"
-      className="h-8 font-mono text-xs"
+      className="h-8 px-2 font-mono text-xs"
     />
   );
 }

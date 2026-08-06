@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { Suspense, useCallback, useRef, useState } from "react";
 import {
   Dna,
   RotateCcw,
@@ -32,6 +32,8 @@ import ScreeningMode, {
   type ScreeningFocus,
 } from "@/components/tools/lnp/screening-mode";
 import RibogreenMode from "@/components/tools/ribogreen/ribogreen-mode";
+import HandoffReader from "@/components/tools/ribogreen/handoff-reader";
+import type { TlnpHandoff } from "@/lib/calculations/tlnp-handoff";
 import {
   computeBenchFormulation,
   type BenchPrepParams,
@@ -78,6 +80,15 @@ export default function LnpFormulaPage() {
   const openRibogreenRecord = useCallback((itemId: string) => {
     setRibogreenRecord({ itemId, token: ++linkToken.current });
     setTab("ribogreen");
+  }, []);
+
+  // ── Arriving from the tLNP workbench ──
+  const [tlnpHandoff, setTlnpHandoff] = useState<TlnpHandoff | null>(null);
+
+  const openTab = useCallback((key: string) => {
+    if (key === "normal" || key === "screening" || key === "ribogreen") {
+      setTab(key);
+    }
   }, []);
 
   // ── Normal mode state (mirrors the old single-formulation page) ──
@@ -261,6 +272,12 @@ export default function LnpFormulaPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+      {/* Behind a boundary because it reads search params, which would
+          otherwise opt this whole route out of static prerendering. */}
+      <Suspense fallback={null}>
+        <HandoffReader onTab={openTab} onHandoff={setTlnpHandoff} />
+      </Suspense>
+
       <div className="mb-2">
         <Link
           href="/tools"
@@ -433,6 +450,7 @@ export default function LnpFormulaPage() {
               onOpenFormulation={openFormulation}
               pendingRecord={ribogreenRecord}
               onPendingRecordHandled={() => setRibogreenRecord(null)}
+              tlnpHandoff={tlnpHandoff}
             />
           </div>
         </TabsContent>

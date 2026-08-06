@@ -12,14 +12,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import ChromatogramChart from "./chromatogram-chart";
-import ConjugationMapStatic from "./conjugation-map-static";
 import { describeMethod } from "@/lib/calculations/lnp-bench";
-import { productName } from "@/lib/calculations/tlnp-conjugation";
+import {
+  computeConjugationDose,
+  findProtein,
+  proteinName,
+  systemName,
+} from "@/lib/calculations/tlnp-conjugation";
 import {
   PURIFICATION_METHOD_LABELS,
   resolveEe,
   serializeTlnpExperiment,
   summarizeBatch,
+  TEM_LABELS,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 import { exportTlnpToXlsx } from "@/lib/export/tlnp-report-xlsx";
@@ -91,15 +96,16 @@ export default function BatchReport({
     }
   }
 
-  const products = data.conjugation.products.map((p) => ({
-    id: p.id,
-    name: productName(
-      p,
-      data.prep.samples.find((s) => s.id === p.sampleId)?.name ?? "",
-      data.conjugation.conditions.find((c) => c.id === p.conditionId)?.name ?? ""
+  const systems = data.conjugation.systems.map((s, i) => ({
+    system: s,
+    name: systemName(s, i),
+    protein: findProtein(data.conjugation.proteins, s.proteinId),
+    dose: computeConjugationDose(
+      s,
+      findProtein(data.conjugation.proteins, s.proteinId)
     ),
     observation: data.conjugation.results.observations.find(
-      (o) => o.productId === p.id
+      (o) => o.systemId === s.id
     ),
   }));
 
@@ -146,8 +152,8 @@ export default function BatchReport({
 
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Stat label="样品" value={String(summary.sampleCount)} />
-            <Stat label="反应条件" value={String(summary.conditionCount)} />
-            <Stat label="tLNP 产物" value={String(summary.productCount)} />
+            <Stat label="蛋白" value={String(summary.proteinCount)} />
+            <Stat label="反应体系" value={String(summary.systemCount)} />
             <Stat label="平均粒径" value={`${n(summary.meanSize_nm)} nm`} />
             <Stat label="平均包封率" value={`${n(summary.meanEe_percent)} %`} />
             <Stat label="平均得率" value={`${n(summary.meanYield_percent)} %`} />
@@ -157,6 +163,9 @@ export default function BatchReport({
             <Meta label="批次编号" value={data.meta.batchCode} mono />
             <Meta label="实验日期" value={data.meta.experimentDate} mono />
             <Meta label="负责人" value={data.meta.operator} />
+            <Meta label="制备日期" value={data.prep.design.date} mono />
+            <Meta label="偶联日期" value={data.conjugation.design.date} mono />
+            <Meta label="纯化日期" value={data.purification.design.date} mono />
             <Meta label="阳离子脂质" value={summary.cationicLipid} />
             <Meta label="反应 linker" value={summary.linker} />
             <Meta label="Cargo" value={summary.cargo} />
@@ -203,6 +212,7 @@ export default function BatchReport({
                     <th className="px-2 py-2 text-left font-medium">得率 %</th>
                     <th className="px-2 py-2 text-left font-medium">粒径 nm</th>
                     <th className="px-2 py-2 text-left font-medium">PDI</th>
+                    <th className="px-2 py-2 text-left font-medium">TEM</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -223,6 +233,9 @@ export default function BatchReport({
                         <td className="px-2 py-1.5 font-mono">
                           {s.dls.pdi || "--"}
                         </td>
+                        <td className="px-2 py-1.5">
+                          {s.tem === "" ? "--" : TEM_LABELS[s.tem]}
+                        </td>
                       </tr>
                     );
                   })}
@@ -233,42 +246,69 @@ export default function BatchReport({
         </Card>
       )}
 
-      {data.conjugation.nodes.length > 0 && (
+      {systems.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">偶联关系</CardTitle>
+            <CardTitle className="text-base">偶联反应</CardTitle>
             <CardDescription>
-              {products.length} 个 tLNP 产物
+              {systems.length} 个反应体系 · {data.conjugation.proteins.length} 个蛋白
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="overflow-x-auto rounded-lg border p-3">
-              <ConjugationMapStatic
-                nodes={data.conjugation.nodes}
-                edges={data.conjugation.edges}
-              />
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[48rem] border-collapse text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="px-2 py-2 text-left font-medium">反应体系</th>
+                    <th className="px-2 py-2 text-left font-medium">蛋白</th>
+                    <th className="px-2 py-2 text-left font-medium">
+                      linker:蛋白
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium">LNP µL</th>
+                    <th className="px-2 py-2 text-left font-medium">蛋白 µL</th>
+                    <th className="px-2 py-2 text-left font-medium">
+                      buffer µL
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium">总 µL</th>
+                    <th className="px-2 py-2 text-left font-medium">外观</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {systems.map((row) => (
+                    <tr key={row.system.id} className="border-b last:border-b-0">
+                      <td className="px-2 py-1.5">{row.name}</td>
+                      <td className="px-2 py-1.5">
+                        {proteinName(row.protein) || "--"}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {row.system.molarRatio ? `1:${row.system.molarRatio}` : "--"}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {n(row.dose.lnpVolume_uL)}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {n(row.dose.proteinVolume_uL)}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {n(row.dose.bufferVolume_uL)}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {n(row.dose.totalVolume_uL)}
+                      </td>
+                      <td className="px-2 py-1.5 text-muted-foreground">
+                        {row.observation?.turbidity === "turbid"
+                          ? "浑浊"
+                          : row.observation?.turbidity === "slight"
+                            ? "微浑"
+                            : row.observation?.turbidity === "clear"
+                              ? "澄清"
+                              : "--"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {products.length > 0 && (
-              <ul className="grid gap-1 sm:grid-cols-2">
-                {products.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-baseline justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-xs"
-                  >
-                    <span className="truncate">{p.name}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {p.observation?.turbidity === "turbid"
-                        ? "浑浊"
-                        : p.observation?.turbidity === "slight"
-                          ? "微浑"
-                          : p.observation?.turbidity === "clear"
-                            ? "澄清"
-                            : "--"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </CardContent>
         </Card>
       )}

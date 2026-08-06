@@ -13,9 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Chip from "./chip";
+import ModuleDate from "./module-date";
 import ParamBench from "./param-bench";
 import MetricTable from "./metric-table";
-import { productName } from "@/lib/calculations/tlnp-conjugation";
+import { systemName } from "@/lib/calculations/tlnp-conjugation";
 import type {
   TlnpAssayModule,
   TlnpExperimentData,
@@ -30,8 +31,8 @@ interface Props {
  * Module 4 — 体外 and 体内, switched rather than tabbed so the choice persists
  * with the batch. Both arms are always stored; switching never discards.
  *
- * The subject list offered to both result tables is the batch's conjugated
- * products when there are any, falling back to the bare samples — what you dose
+ * The subject list offered to both result tables is the batch's reaction
+ * systems when there are any, falling back to the bare samples — what you dose
  * is the tLNP, not the naked LNP, once module 2 has run.
  */
 export default function ModuleAssay({ data, update }: Props) {
@@ -41,17 +42,10 @@ export default function ModuleAssay({ data, update }: Props) {
     update((prev) => ({ ...prev, assay: patch(prev.assay) }));
 
   const subjects = useMemo(() => {
-    const products = data.conjugation.products.map((p) =>
-      productName(
-        p,
-        data.prep.samples.find((s) => s.id === p.sampleId)?.name ?? "",
-        data.conjugation.conditions.find((c) => c.id === p.conditionId)?.name ??
-          ""
-      )
-    );
-    if (products.length > 0) return products;
+    const systems = data.conjugation.systems.map(systemName);
+    if (systems.length > 0) return systems;
     return data.prep.samples.map((s, i) => s.name || `样品 ${i + 1}`);
-  }, [data.conjugation.products, data.conjugation.conditions, data.prep.samples]);
+  }, [data.conjugation.systems, data.prep.samples]);
 
   const isVitro = assay.active === "invitro";
 
@@ -76,9 +70,23 @@ export default function ModuleAssay({ data, update }: Props) {
         <>
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Microscope className="h-4 w-4 text-pillar-disease" />
-                <CardTitle className="text-base">体外实验设计</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Microscope className="h-4 w-4 text-pillar-disease" />
+                  <CardTitle className="text-base">体外实验设计</CardTitle>
+                </div>
+                <ModuleDate
+                  value={assay.invitro.design.date}
+                  onChange={(date) =>
+                    setAssay((a) => ({
+                      ...a,
+                      invitro: {
+                        ...a.invitro,
+                        design: { ...a.invitro.design, date },
+                      },
+                    }))
+                  }
+                />
               </div>
               <CardDescription>
                 细胞系、孔板、转染时的细胞密度与剂量。
@@ -257,9 +265,23 @@ export default function ModuleAssay({ data, update }: Props) {
         <>
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Mouse className="h-4 w-4 text-pillar-disease" />
-                <CardTitle className="text-base">体内实验设计</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Mouse className="h-4 w-4 text-pillar-disease" />
+                  <CardTitle className="text-base">体内实验设计</CardTitle>
+                </div>
+                <ModuleDate
+                  value={assay.invivo.design.date}
+                  onChange={(date) =>
+                    setAssay((a) => ({
+                      ...a,
+                      invivo: {
+                        ...a.invivo,
+                        design: { ...a.invivo.design, date },
+                      },
+                    }))
+                  }
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">

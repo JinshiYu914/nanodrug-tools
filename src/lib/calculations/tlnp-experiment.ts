@@ -14,8 +14,10 @@
  *   exporters accept `prep.samples` with no adapter. Do not demote it to a
  *   `formulation:` field — that trades a whole PDF exporter for nothing.
  *
- * - The flow graph uses our own node/edge types, never @xyflow/react's. Stored
- *   data must not be shaped by a rendering library we might replace.
+ * - Module 2 is a matrix, not a graph. One `ReactionSystem` is one column: the
+ *   LNP going in, the protein, the ratio and the reaction parameters, which
+ *   together are one tLNP out. Schema v1 stored a sample × condition graph
+ *   instead; `parseTlnpExperiment` folds those legacy products into systems.
  *
  * `parseTlnpExperiment` never throws: this is a lab notebook, and a batch that
  * refuses to open because one field went weird is worse than a batch that opens
@@ -25,6 +27,8 @@
 import {
   createCustomEntry,
   createDefaultEntries,
+  getAminesPerMolecule,
+  isKnownLipid,
   type LipidEntry,
 } from "./lnp-formula";
 import {
@@ -45,10 +49,10 @@ import {
   INVITRO_PARAM_PRESETS,
   INVIVO_PARAM_PRESETS,
   PREP_PARAM_PRESETS,
-  PURIFICATION_PARAM_PRESETS,
 } from "./tlnp-params";
 
-export const TLNP_SCHEMA_VERSION = 1;
+/** v2 replaced module 2's sample × condition graph with the reaction matrix. */
+export const TLNP_SCHEMA_VERSION = 2;
 
 // ─── Shared result shapes ─────────────────────────────────
 
@@ -92,6 +96,20 @@ export interface DlsResult {
   instrument: string;
   note: string;
 }
+
+/**
+ * Whether a TEM image exists for this sample.
+ *
+ * Deliberately a flag, not the image: the characterization matrix answers "did
+ * we shoot it?" at a glance, and the picture itself lives wherever the
+ * microscope wrote it until there's a storage bucket to upload into.
+ */
+export type TemFlag = "yes" | "no" | "";
+
+export const TEM_LABELS: Record<Exclude<TemFlag, "">, string> = {
+  yes: "有",
+  no: "无",
+};
 
 export function emptyEeResult(): EeResult {
   return {
@@ -155,11 +173,15 @@ export interface SolventExchange {
 export interface TlnpPrepSample extends BenchFormulation {
   ee: EeResult;
   dls: DlsResult;
+  tem: TemFlag;
   resultNote: string;
 }
 
 export interface TlnpPrepModule {
   design: {
+    /** When this module was actually carried out — modules run on different
+     *  days, so each records its own rather than inheriting the batch date. */
+    date: string;
     params: ParamEntry[];
     solvent: SolventExchange;
     note: string;
@@ -253,101 +275,182 @@ export function createTlnpSample(
     createdAt: new Date().toISOString(),
     ee: emptyEeResult(),
     dls: emptyDlsResult(),
+    tem: "",
     resultNote: "",
   };
 }
 
+/** The linker lipid's molar ratio (mol %), or "" when the sample has none. */
+export function sampleLinkerPercent(s: BenchFormulation): string {
+  return s.lipidEntries.find((e) => e.typeKey === "linker")?.molarRatio ?? "";
+}
+
+/** The ionizable lipid's molar ratio (mol %) — the denominator that turns
+ *  N/P into total lipid, and from there into linker. */
+export function sampleIonizablePercent(s: BenchFormulation): string {
+  return s.lipidEntries.find((e) => e.typeKey === "ionizable")?.molarRatio ?? "";
+}
+
 // ─── Module 2: 偶联反应 ───────────────────────────────────
 
-export interface ReactionCondition {
+export type ProteinConcUnit = "mg_per_mL" | "uM";
+
+/**
+ * A protein as used in this batch.
+ *
+ * Copied into the batch rather than referenced by id: the library row is a
+ * convenience for not retyping a molecular weight, but a notebook has to still
+ * say what was actually added after the library entry is edited or deleted.
+ * `libraryId` is a breadcrumb, never a dependency.
+ */
+export interface ProteinEntry {
   id: string;
   name: string;
-  linker: string;
+  /** Da */
+  mw: string;
+  conc: string;
+  concUnit: ProteinConcUnit;
+  note: string;
+  libraryId: string;
+}
+
+export function createProteinEntry(index = 0): ProteinEntry {
+  return {
+    id: genId(),
+    name: index === 0 ? "" : `蛋白 ${index + 1}`,
+    mw: "",
+    conc: "",
+    concUnit: "mg_per_mL",
+    note: "",
+    libraryId: "",
+  };
+}
+
+/**
+ * What the linker moles are computed from.
+ *
+ * Snapshotted onto the system rather than read live off the sample, because a
+ * system can also describe an LNP that was never in this batch's 制备 module,
+ * and because editing a sample months later must not silently restate what was
+ * pipetted at the bench.
+ */
+export interface LnpBasis {
+  npRatio: string;
+  /** Ionizable lipid mol % — turns N/P into total lipid. */
+  ionizablePercent: string;
+  aminesPerMolecule: string;
+}
+
+/**
+ * One column of the reaction matrix: an LNP, a protein, a ratio and the
+ * conditions it reacted under. One system in, one tLNP out.
+ */
+export interface ReactionSystem {
+  id: string;
+  name: string;
+  /** The prep sample this LNP came from; "" when typed in by hand. */
+  sampleId: string;
+  /** Denormalized so a deleted sample doesn't erase what was reacted. */
+  lnpName: string;
   /** ng/µL on an RNA basis — the same unit RiboGreen reports, deliberately. */
   lnpConc: string;
-  lnpAmount: string;
-  lnpAmountUnit: "uL" | "ug";
-  proteinName: string;
-  /** Da */
-  proteinMW: string;
-  proteinConc: string;
-  proteinConcUnit: "mg_per_mL" | "uM";
-  /** 蛋白 : LNP */
-  targetMolarRatio: string;
-  /** Average RNA length in nt — turns ng of RNA into mol. Blank = use 1000. */
-  rnaLength_nt: string;
+  lnpVolume: string;
+  /** Linker lipid mol %, e.g. DSPE-PEG2k-mal at 0.5. */
+  linkerPercent: string;
+  basis: LnpBasis;
+  proteinId: string;
+  /** linker : 蛋白 = 1 : this. Default 1. */
+  molarRatio: string;
   temperature: string;
   duration: string;
   shaking: string;
+  /** µL — the volume the reaction is made up to, which is what pins buffer. */
+  totalVolume: string;
+  reactionBuffer: string;
   note: string;
-}
-
-export type TlnpNodeKind = "sample" | "condition" | "product";
-
-export interface TlnpFlowNode {
-  /** Namespaced: `s:<sampleId>` | `c:<conditionId>` | `p:<productId>` */
-  id: string;
-  kind: TlnpNodeKind;
-  refId: string;
-  /** Denormalized so the static SVG and the PDF render without resolving refs. */
-  label: string;
-  position: { x: number; y: number };
-}
-
-export interface TlnpFlowEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-}
-
-export interface ConjugateProduct {
-  id: string;
-  /** Auto name is `${sampleName}-${conditionName}`; this holds an override. */
-  nameOverride: string;
-  sampleId: string;
-  conditionId: string;
 }
 
 export interface ObservationRow {
   id: string;
-  productId: string;
+  systemId: string;
   turbidity: "clear" | "slight" | "turbid" | "";
   precipitate: "none" | "slight" | "heavy" | "";
   note: string;
 }
 
 export interface TlnpConjugationModule {
-  conditions: ReactionCondition[];
-  nodes: TlnpFlowNode[];
-  edges: TlnpFlowEdge[];
-  products: ConjugateProduct[];
+  design: { date: string };
+  proteins: ProteinEntry[];
+  systems: ReactionSystem[];
   results: { observations: ObservationRow[]; discussion: string };
 }
 
-export function createReactionCondition(index: number): ReactionCondition {
+export function emptyLnpBasis(): LnpBasis {
+  return { npRatio: "6", ionizablePercent: "50", aminesPerMolecule: "1" };
+}
+
+export function createReactionSystem(index: number): ReactionSystem {
   return {
     id: genId(),
-    name: `条件 ${index + 1}`,
-    linker: "",
+    name: `体系 ${index + 1}`,
+    sampleId: "",
+    lnpName: "",
     lnpConc: "",
-    lnpAmount: "",
-    lnpAmountUnit: "uL",
-    proteinName: "",
-    proteinMW: "",
-    proteinConc: "",
-    proteinConcUnit: "mg_per_mL",
-    targetMolarRatio: "",
-    rnaLength_nt: "",
+    lnpVolume: "",
+    linkerPercent: "",
+    basis: emptyLnpBasis(),
+    proteinId: "",
+    molarRatio: "1",
     temperature: "室温",
     duration: "2 h",
     shaking: "",
+    totalVolume: "",
+    reactionBuffer: "PBS pH 7.4",
     note: "",
   };
 }
 
-export function createObservationRow(): ObservationRow {
-  return { id: genId(), productId: "", turbidity: "", precipitate: "", note: "" };
+/**
+ * Seed a reaction system from a prepared sample.
+ *
+ * Concentration and volume come from whatever the sample's RiboGreen result
+ * says, so the common path — make LNP, measure it, react it — needs no retyping.
+ * Everything stays editable afterwards.
+ */
+export function systemFromSample(
+  sample: TlnpPrepSample,
+  index: number
+): ReactionSystem {
+  const base = createReactionSystem(index);
+  const ee = resolveEe(sample.ee);
+  const ionizable = sample.lipidEntries.find((e) => e.typeKey === "ionizable");
+  const custom = ionizable
+    ? ionizable.isCustomLipid || !isKnownLipid("ionizable", ionizable.lipidName)
+    : true;
+  return {
+    ...base,
+    name: sample.name || `体系 ${index + 1}`,
+    sampleId: sample.id,
+    lnpName: sample.name || `样品 ${index + 1}`,
+    lnpConc: ee.conc === null ? "" : String(round2(ee.conc)),
+    lnpVolume: ee.volume === null ? "" : String(round2(ee.volume)),
+    linkerPercent: sampleLinkerPercent(sample),
+    basis: {
+      npRatio: sample.prep.npRatio,
+      ionizablePercent: sampleIonizablePercent(sample) || "50",
+      aminesPerMolecule: custom
+        ? sample.prep.aminesPerMolecule
+        : String(getAminesPerMolecule(ionizable?.lipidName ?? "")),
+    },
+  };
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+export function createObservationRow(systemId = ""): ObservationRow {
+  return { id: genId(), systemId, turbidity: "", precipitate: "", note: "" };
 }
 
 // ─── Module 3: LNP 纯化 ───────────────────────────────────
@@ -381,6 +484,9 @@ export interface Chromatogram {
   fractions: ChromatogramFraction[];
   source: "paste" | "csv";
   sourceName: string;
+  /** The text that was pasted, kept so the run can be corrected and re-parsed
+   *  instead of re-pasted from scratch when one row was wrong. */
+  rawText: string;
   note: string;
 }
 
@@ -393,25 +499,74 @@ export interface TemResult {
 
 export type PurificationMethod = "cl4b" | "ultrafiltration" | "dialysis" | "";
 
+/** The four column facts worth saving as a reusable preset. */
+export interface Cl4bParams {
+  columnLength: string;
+  columnDiameter: string;
+  flowRate: string;
+  buffer: string;
+}
+
+export interface Cl4bDesign extends Cl4bParams {
+  /** CL-4B is often followed by a spin concentration; recording it here keeps
+   *  the two halves of one purification in one place. */
+  ultrafiltrationConcentrate: boolean;
+  note: string;
+}
+
+export function emptyCl4bDesign(): Cl4bDesign {
+  return {
+    columnLength: "",
+    columnDiameter: "",
+    flowRate: "",
+    buffer: "",
+    ultrafiltrationConcentrate: false,
+    note: "",
+  };
+}
+
+/**
+ * Post-purification characterization for one reaction system.
+ *
+ * Same shape as a prep sample's results so one matrix component renders both,
+ * and so a number means the same thing before and after the column.
+ */
+export interface SystemCharacterization {
+  id: string;
+  systemId: string;
+  ee: EeResult;
+  dls: DlsResult;
+  tem: TemFlag;
+  note: string;
+}
+
+export function createSystemCharacterization(
+  systemId: string
+): SystemCharacterization {
+  return {
+    id: genId(),
+    systemId,
+    ee: emptyEeResult(),
+    dls: emptyDlsResult(),
+    tem: "",
+    note: "",
+  };
+}
+
 export interface TlnpPurificationModule {
   design: {
+    date: string;
     method: PurificationMethod;
-    cl4b: {
-      columnLength: string;
-      columnDiameter: string;
-      flowRate: string;
-      buffer: string;
-      note: string;
-    };
+    cl4b: Cl4bDesign;
     ultrafiltration: { mwco: string; cycles: string; note: string };
     dialysis: { mwco: string; duration: string; buffer: string; note: string };
-    params: ParamEntry[];
+    operator: string;
     note: string;
   };
   chromatograms: Chromatogram[];
   results: {
-    ee: EeResult;
-    dls: DlsResult;
+    /** One row per reaction system. */
+    systems: SystemCharacterization[];
     tem: TemResult;
     discussion: string;
   };
@@ -440,6 +595,7 @@ export interface MetricRow {
 }
 
 export interface InVitroDesign {
+  date: string;
   cellLine: string;
   /** 原代代数, e.g. A1P1. */
   passage: string;
@@ -452,6 +608,7 @@ export interface InVitroDesign {
 }
 
 export interface InVivoDesign {
+  date: string;
   species: string;
   strain: string;
   route: string;
@@ -510,6 +667,7 @@ export function emptyTlnpExperiment(): TlnpExperimentData {
     },
     prep: {
       design: {
+        date: todayISO(),
         params: createParamEntries(PREP_PARAM_PRESETS),
         solvent: emptySolvent(),
         note: "",
@@ -518,31 +676,24 @@ export function emptyTlnpExperiment(): TlnpExperimentData {
       results: { discussion: "" },
     },
     conjugation: {
-      conditions: [],
-      nodes: [],
-      edges: [],
-      products: [],
+      design: { date: "" },
+      proteins: [],
+      systems: [],
       results: { observations: [], discussion: "" },
     },
     purification: {
       design: {
+        date: "",
         method: "",
-        cl4b: {
-          columnLength: "",
-          columnDiameter: "",
-          flowRate: "",
-          buffer: "",
-          note: "",
-        },
+        cl4b: emptyCl4bDesign(),
         ultrafiltration: { mwco: "", cycles: "", note: "" },
         dialysis: { mwco: "", duration: "", buffer: "", note: "" },
-        params: createParamEntries(PURIFICATION_PARAM_PRESETS),
+        operator: "",
         note: "",
       },
       chromatograms: [],
       results: {
-        ee: emptyEeResult(),
-        dls: emptyDlsResult(),
+        systems: [],
         tem: { imageUrl: "", magnification: "", note: "" },
         discussion: "",
       },
@@ -551,6 +702,7 @@ export function emptyTlnpExperiment(): TlnpExperimentData {
       active: "invitro",
       invitro: {
         design: {
+          date: "",
           cellLine: "",
           passage: "",
           plate: "",
@@ -564,6 +716,7 @@ export function emptyTlnpExperiment(): TlnpExperimentData {
       },
       invivo: {
         design: {
+          date: "",
           species: "",
           strain: "",
           route: "",
@@ -687,50 +840,134 @@ function parseSample(raw: unknown, index: number): TlnpPrepSample {
     createdAt: str(o.createdAt, base.createdAt),
     ee: parseEe(o.ee),
     dls: parseDls(o.dls),
+    tem: pick(o.tem, ["yes", "no", ""] as const, ""),
     resultNote: str(o.resultNote),
   };
 }
 
-function parseCondition(raw: unknown, index: number): ReactionCondition {
+function parseProtein(raw: unknown, index: number): ProteinEntry {
   const o = obj(raw);
-  const base = createReactionCondition(index);
+  const base = createProteinEntry(index);
   return {
     id: str(o.id) || base.id,
     name: str(o.name, base.name),
-    linker: str(o.linker),
+    mw: str(o.mw),
+    conc: str(o.conc),
+    concUnit: pick(o.concUnit, ["mg_per_mL", "uM"] as const, "mg_per_mL"),
+    note: str(o.note),
+    libraryId: str(o.libraryId),
+  };
+}
+
+function parseSystem(raw: unknown, index: number): ReactionSystem {
+  const o = obj(raw);
+  const base = createReactionSystem(index);
+  const b = obj(o.basis);
+  return {
+    id: str(o.id) || base.id,
+    name: str(o.name, base.name),
+    sampleId: str(o.sampleId),
+    lnpName: str(o.lnpName),
     lnpConc: str(o.lnpConc),
-    lnpAmount: str(o.lnpAmount),
-    lnpAmountUnit: pick(o.lnpAmountUnit, ["uL", "ug"] as const, "uL"),
-    proteinName: str(o.proteinName),
-    proteinMW: str(o.proteinMW),
-    proteinConc: str(o.proteinConc),
-    proteinConcUnit: pick(
-      o.proteinConcUnit,
-      ["mg_per_mL", "uM"] as const,
-      "mg_per_mL"
-    ),
-    targetMolarRatio: str(o.targetMolarRatio),
-    rnaLength_nt: str(o.rnaLength_nt),
+    lnpVolume: str(o.lnpVolume),
+    linkerPercent: str(o.linkerPercent),
+    basis: {
+      npRatio: str(b.npRatio, base.basis.npRatio),
+      ionizablePercent: str(b.ionizablePercent, base.basis.ionizablePercent),
+      aminesPerMolecule: str(b.aminesPerMolecule, base.basis.aminesPerMolecule),
+    },
+    proteinId: str(o.proteinId),
+    molarRatio: str(o.molarRatio, base.molarRatio),
     temperature: str(o.temperature, base.temperature),
     duration: str(o.duration, base.duration),
     shaking: str(o.shaking),
+    totalVolume: str(o.totalVolume),
+    reactionBuffer: str(o.reactionBuffer, base.reactionBuffer),
     note: str(o.note),
   };
 }
 
-function parseFlowNode(raw: unknown): TlnpFlowNode | null {
-  const o = obj(raw);
-  const id = str(o.id);
-  const refId = str(o.refId);
-  if (!id || !refId) return null;
-  const p = obj(o.position);
-  return {
-    id,
-    kind: pick(o.kind, ["sample", "condition", "product"] as const, "sample"),
-    refId,
-    label: str(o.label),
-    position: { x: num(p.x) ?? 0, y: num(p.y) ?? 0 },
+/**
+ * Fold a schema-v1 graph into reaction systems.
+ *
+ * v1 stored reaction conditions and a sample × condition edge list, where each
+ * edge was one tLNP. Each of those pairs is exactly one system, so the notebook
+ * survives the model change instead of opening blank.
+ */
+function systemsFromLegacyGraph(
+  conj: Record<string, unknown>,
+  samples: TlnpPrepSample[]
+): { proteins: ProteinEntry[]; systems: ReactionSystem[] } {
+  const conditions = arr(conj.conditions).map(obj);
+  const products = arr(conj.products).map(obj);
+  if (conditions.length === 0) return { proteins: [], systems: [] };
+
+  // One protein per distinct (name, MW, conc) the old conditions carried.
+  const proteins: ProteinEntry[] = [];
+  const proteinFor = (c: Record<string, unknown>): string => {
+    const name = str(c.proteinName);
+    const mw = str(c.proteinMW);
+    const conc = str(c.proteinConc);
+    if (!name && !mw && !conc) return "";
+    const hit = proteins.find(
+      (p) => p.name === name && p.mw === mw && p.conc === conc
+    );
+    if (hit) return hit.id;
+    const next: ProteinEntry = {
+      ...createProteinEntry(proteins.length),
+      name: name || `蛋白 ${proteins.length + 1}`,
+      mw,
+      conc,
+      concUnit: pick(c.proteinConcUnit, ["mg_per_mL", "uM"] as const, "mg_per_mL"),
+    };
+    proteins.push(next);
+    return next.id;
   };
+
+  const pairs =
+    products.length > 0
+      ? products.map((p) => ({
+          sampleId: str(p.sampleId),
+          conditionId: str(p.conditionId),
+          nameOverride: str(p.nameOverride),
+        }))
+      : // No edges were ever drawn — keep the conditions themselves so their
+        // numbers aren't lost, unattached to any sample.
+        conditions.map((c) => ({
+          sampleId: "",
+          conditionId: str(c.id),
+          nameOverride: "",
+        }));
+
+  const systems = pairs.map((pair, i) => {
+    const c = conditions.find((x) => str(x.id) === pair.conditionId) ?? {};
+    const sample = samples.find((s) => s.id === pair.sampleId) ?? null;
+    const seeded = sample
+      ? systemFromSample(sample, i)
+      : createReactionSystem(i);
+    const conditionName = str(c.name);
+    return {
+      ...seeded,
+      name:
+        pair.nameOverride ||
+        [sample?.name, conditionName].filter(Boolean).join("-") ||
+        seeded.name,
+      lnpConc: str(c.lnpConc) || seeded.lnpConc,
+      lnpVolume:
+        str(c.lnpAmountUnit) === "ug" ? seeded.lnpVolume : str(c.lnpAmount) || seeded.lnpVolume,
+      linkerPercent: seeded.linkerPercent,
+      proteinId: proteinFor(c),
+      // The v1 ratio was 蛋白:RNA and has no meaning under linker:蛋白 — a
+      // wrong number here would be pipetted, so it starts at the 1:1 default.
+      molarRatio: seeded.molarRatio,
+      temperature: str(c.temperature, seeded.temperature),
+      duration: str(c.duration, seeded.duration),
+      shaking: str(c.shaking),
+      note: str(c.note),
+    };
+  });
+
+  return { proteins, systems };
 }
 
 function parseChromatogram(raw: unknown, index: number): Chromatogram {
@@ -769,6 +1006,19 @@ function parseChromatogram(raw: unknown, index: number): Chromatogram {
       .filter((f): f is ChromatogramFraction => f !== null),
     source: pick(o.source, ["paste", "csv"] as const, "paste"),
     sourceName: str(o.sourceName),
+    rawText: str(o.rawText),
+    note: str(o.note),
+  };
+}
+
+function parseSystemCharacterization(raw: unknown): SystemCharacterization {
+  const o = obj(raw);
+  return {
+    id: str(o.id) || genId(),
+    systemId: str(o.systemId),
+    ee: parseEe(o.ee),
+    dls: parseDls(o.dls),
+    tem: pick(o.tem, ["yes", "no", ""] as const, ""),
     note: str(o.note),
   };
 }
@@ -806,6 +1056,7 @@ export function parseTlnpExperiment(
   const solvent = obj(prepDesign.solvent);
   d.prep = {
     design: {
+      date: str(prepDesign.date, d.prep.design.date),
       params: mergeParamEntries(PREP_PARAM_PRESETS, prepDesign.params),
       solvent: {
         method: parseBenchMethod(solvent.method),
@@ -820,45 +1071,25 @@ export function parseTlnpExperiment(
   // ── Module 2 ──
   const conj = obj(o.conjugation);
   const conjResults = obj(conj.results);
+  const legacy =
+    !Array.isArray(conj.systems) && Array.isArray(conj.conditions)
+      ? systemsFromLegacyGraph(conj, d.prep.samples)
+      : null;
   d.conjugation = {
-    conditions: arr(conj.conditions).map(parseCondition),
-    nodes: arr(conj.nodes)
-      .map(parseFlowNode)
-      .filter((n): n is TlnpFlowNode => n !== null),
-    edges: arr(conj.edges)
-      .map((e) => {
-        const eo = obj(e);
-        const source = str(eo.source);
-        const target = str(eo.target);
-        if (!source || !target) return null;
-        return {
-          id: str(eo.id) || genId(),
-          source,
-          target,
-          ...(typeof eo.label === "string" ? { label: eo.label } : {}),
-        };
-      })
-      .filter((e): e is TlnpFlowEdge => e !== null),
-    products: arr(conj.products)
-      .map((p) => {
-        const po = obj(p);
-        const sampleId = str(po.sampleId);
-        const conditionId = str(po.conditionId);
-        if (!sampleId || !conditionId) return null;
-        return {
-          id: str(po.id) || genId(),
-          nameOverride: str(po.nameOverride),
-          sampleId,
-          conditionId,
-        };
-      })
-      .filter((p): p is ConjugateProduct => p !== null),
+    design: { date: str(obj(conj.design).date) },
+    proteins: legacy
+      ? legacy.proteins
+      : arr(conj.proteins).map(parseProtein),
+    systems: legacy ? legacy.systems : arr(conj.systems).map(parseSystem),
     results: {
       observations: arr(conjResults.observations).map((r) => {
         const ro = obj(r);
         return {
           id: str(ro.id) || genId(),
-          productId: str(ro.productId),
+          // v1 keyed observations by product id; those ids became system ids
+          // only when the graph is re-derived, so an unmatched one just shows
+          // as unassigned rather than being dropped.
+          systemId: str(ro.systemId) || str(ro.productId),
           turbidity: pick(
             ro.turbidity,
             ["clear", "slight", "turbid", ""] as const,
@@ -886,6 +1117,7 @@ export function parseTlnpExperiment(
   const tem = obj(purResults.tem);
   d.purification = {
     design: {
+      date: str(purDesign.date),
       method: pick(
         purDesign.method,
         ["cl4b", "ultrafiltration", "dialysis", ""] as const,
@@ -896,6 +1128,7 @@ export function parseTlnpExperiment(
         columnDiameter: str(cl4b.columnDiameter),
         flowRate: str(cl4b.flowRate),
         buffer: str(cl4b.buffer),
+        ultrafiltrationConcentrate: cl4b.ultrafiltrationConcentrate === true,
         note: str(cl4b.note),
       },
       ultrafiltration: {
@@ -909,13 +1142,20 @@ export function parseTlnpExperiment(
         buffer: str(dia.buffer),
         note: str(dia.note),
       },
-      params: mergeParamEntries(PURIFICATION_PARAM_PRESETS, purDesign.params),
+      // v1 kept the operator in a ParamBench alongside a buffer field the
+      // method sections already ask for; only the operator survives.
+      operator:
+        str(purDesign.operator) ||
+        str(
+          arr(purDesign.params)
+            .map(obj)
+            .find((p) => p.id === "purifyOperator")?.value
+        ),
       note: str(purDesign.note),
     },
     chromatograms: arr(pur.chromatograms).map(parseChromatogram),
     results: {
-      ee: parseEe(purResults.ee),
-      dls: parseDls(purResults.dls),
+      systems: arr(purResults.systems).map(parseSystemCharacterization),
       tem: {
         imageUrl: str(tem.imageUrl),
         magnification: str(tem.magnification),
@@ -937,6 +1177,7 @@ export function parseTlnpExperiment(
     active: pick(assay.active, ["invitro", "invivo"] as const, "invitro"),
     invitro: {
       design: {
+        date: str(vitroDesign.date),
         cellLine: str(vitroDesign.cellLine),
         passage: str(vitroDesign.passage),
         plate: str(vitroDesign.plate),
@@ -953,6 +1194,7 @@ export function parseTlnpExperiment(
     },
     invivo: {
       design: {
+        date: str(vivoDesign.date),
         species: str(vivoDesign.species),
         strain: str(vivoDesign.strain),
         route: str(vivoDesign.route),
@@ -1004,8 +1246,8 @@ export function moduleFilled(
       );
     case 2:
       return (
-        d.conjugation.conditions.length > 0 ||
-        d.conjugation.edges.length > 0 ||
+        d.conjugation.systems.length > 0 ||
+        d.conjugation.proteins.length > 0 ||
         d.conjugation.results.observations.length > 0 ||
         d.conjugation.results.discussion.trim() !== ""
       );
@@ -1013,6 +1255,7 @@ export function moduleFilled(
       return (
         d.purification.design.method !== "" ||
         d.purification.chromatograms.length > 0 ||
+        d.purification.results.systems.length > 0 ||
         d.purification.results.discussion.trim() !== "" ||
         d.purification.results.tem.imageUrl.trim() !== ""
       );
@@ -1032,8 +1275,8 @@ export function moduleFilled(
 
 export interface TlnpBatchSummary {
   sampleCount: number;
-  conditionCount: number;
-  productCount: number;
+  proteinCount: number;
+  systemCount: number;
   meanSize_nm: number | null;
   meanPdi: number | null;
   meanEe_percent: number | null;
@@ -1052,8 +1295,8 @@ export function summarizeBatch(d: TlnpExperimentData): TlnpBatchSummary {
   const ees = samples.map((s) => resolveEe(s.ee));
   return {
     sampleCount: samples.length,
-    conditionCount: d.conjugation.conditions.length,
-    productCount: d.conjugation.products.length,
+    proteinCount: d.conjugation.proteins.length,
+    systemCount: d.conjugation.systems.length,
     meanSize_nm: mean(samples.map((s) => numOrNull(s.dls.size_nm))),
     meanPdi: mean(samples.map((s) => numOrNull(s.dls.pdi))),
     meanEe_percent: mean(ees.map((e) => e.ee)),

@@ -1,13 +1,16 @@
 /**
  * Chromatogram import and geometry.
  *
- * Two entry points — an Excel paste and a CSV upload — that converge on the
- * same `Chromatogram`, and one path builder shared by the on-screen SVG chart
- * and (later) the react-pdf render, so the printed peak is the same shape as
- * the one on screen.
+ * One entry point — a paste straight out of the instrument's export or a
+ * spreadsheet — and one path builder shared by the on-screen SVG chart and the
+ * react-pdf render, so the printed peak is the same shape as the one on screen.
+ *
+ * Column order is 体积/CV, then the detection channels in the order the
+ * instrument writes them (A280 before A260 on an ÄKTA). A header row overrides
+ * the defaults; without one, `DEFAULT_CHANNEL_LABELS` names them.
  */
 
-import { genId, normalizeNumericCell, parseClipboardGrid } from "./ribogreen";
+import { genId, normalizeNumericCell } from "./ribogreen";
 import { niceDomain, type Domain } from "./chart-scale";
 import type {
   Chromatogram,
@@ -46,10 +49,18 @@ function looksLikeHeader(grid: string[][]): boolean {
 }
 
 /**
- * Build channels from a header row, or generic names when there isn't one.
+ * What the detection columns are called when the paste has no header row.
  *
- * Columns beyond the first are all channels — A260 and A280 together are the
- * normal case, and slots cycle through chart-1..5.
+ * Naming them 通道 1 / 通道 2 was technically honest and practically useless —
+ * nobody reads a chromatogram legend looking for "channel 2". This is the
+ * documented paste order, so the labels can just say what they are.
+ */
+export const DEFAULT_CHANNEL_LABELS = ["A280", "A260"];
+
+/**
+ * Build channels from a header row, or the documented defaults when there
+ * isn't one. Columns beyond the first are all channels; slots cycle through
+ * chart-1..5.
  */
 export function detectChannels(
   header: string[] | null,
@@ -57,7 +68,8 @@ export function detectChannels(
 ): ChromatogramChannel[] {
   const out: ChromatogramChannel[] = [];
   for (let i = 1; i < columnCount; i++) {
-    const label = header?.[i]?.trim() || `通道 ${i}`;
+    const label =
+      header?.[i]?.trim() || DEFAULT_CHANNEL_LABELS[i - 1] || `通道 ${i}`;
     out.push({
       id: genId(),
       label,
@@ -105,7 +117,13 @@ function fromGrid(grid: string[][]): ParsedChromatogram {
 
   if (dropped > 0) warnings.push(`忽略了 ${dropped} 行无法解析的数据`);
   if (points.length === 0) warnings.push("没有解析出有效数据点");
-  if (!hasHeader) warnings.push("没有识别到表头，通道已按顺序命名");
+  if (!hasHeader) {
+    warnings.push(
+      `没有识别到表头，检测通道已按粘贴顺序命名为 ${channels
+        .map((c) => c.label)
+        .join(" / ")}`
+    );
+  }
 
   // Out-of-order exports plot as a scribble, so sort rather than trusting it.
   points.sort((a, b) => a.x - b.x);
@@ -114,54 +132,40 @@ function fromGrid(grid: string[][]): ParsedChromatogram {
   return { channels, points, xLabel, warnings };
 }
 
-/** Excel paste — tab separated, optional header row. */
-export function parseChromatogramTable(text: string): ParsedChromatogram {
-  return fromGrid(parseClipboardGrid(text));
+/**
+ * Split a pasted block into cells.
+ *
+ * A spreadsheet copy is tab separated, but people also paste the contents of a
+ * CSV straight in, so the separator is picked per paste. Semicolon is tried
+ * before comma because a semicolon-separated export is exactly the one that
+ * uses commas as decimal points, and splitting on those would shred it.
+ */
+function splitPaste(text: string): string[][] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+  if (lines.length === 0) return [];
+
+  const body = lines.join("\n");
+  const sep: string | RegExp = body.includes("\t")
+    ? "\t"
+    : body.includes(";")
+      ? ";"
+      : body.includes(",")
+        ? ","
+        : /\s+/;
+
+  return lines.map((line) => line.trim().split(sep).map((c) => c.trim()));
 }
 
-/**
- * CSV upload. Handles comma and semicolon separators plus quoted fields, since
- * instrument software exports all three shapes.
- */
-export function parseChromatogramCsv(text: string): ParsedChromatogram {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
-  const sample = lines.find((l) => l.trim() !== "") ?? "";
-  const sep = sample.includes(";") && !sample.includes(",") ? ";" : ",";
-
-  const grid = lines.map((line) => {
-    const cells: string[] = [];
-    let cur = "";
-    let quoted = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (quoted) {
-        if (ch === '"') {
-          if (line[i + 1] === '"') {
-            cur += '"';
-            i++;
-          } else quoted = false;
-        } else cur += ch;
-      } else if (ch === '"') {
-        quoted = true;
-      } else if (ch === sep) {
-        cells.push(cur.trim());
-        cur = "";
-      } else {
-        cur += ch;
-      }
-    }
-    cells.push(cur.trim());
-    return cells;
-  });
-
-  return fromGrid(grid);
+/** The paste. Optional header row; column order is x, then the channels. */
+export function parseChromatogramTable(text: string): ParsedChromatogram {
+  return fromGrid(splitPaste(text));
 }
 
 export function createChromatogram(
   parsed: ParsedChromatogram,
   name: string,
-  source: "paste" | "csv",
-  sourceName: string
+  rawText: string
 ): Chromatogram {
   return {
     id: genId(),
@@ -170,9 +174,32 @@ export function createChromatogram(
     channels: parsed.channels,
     points: parsed.points,
     fractions: [],
-    source,
-    sourceName,
+    source: "paste",
+    sourceName: "",
+    rawText,
     note: "",
+  };
+}
+
+/**
+ * Re-parse an edited paste in place.
+ *
+ * Keeps the id, name, note and marked fractions — the user is correcting a
+ * mistyped row, not starting over, and losing their peak annotations for that
+ * would make them re-paste instead.
+ */
+export function reparseChromatogram(
+  previous: Chromatogram,
+  parsed: ParsedChromatogram,
+  rawText: string
+): Chromatogram {
+  return {
+    ...previous,
+    xLabel: parsed.xLabel,
+    channels: parsed.channels,
+    points: parsed.points,
+    source: "paste",
+    rawText,
   };
 }
 
