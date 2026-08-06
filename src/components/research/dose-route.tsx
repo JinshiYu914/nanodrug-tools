@@ -82,6 +82,12 @@ export function DoseRoute() {
   const active = PILLARS[activeIndex] ?? PILLARS[0];
   const activeTone = ACCENT_CLASS[active.accent];
 
+  /** At most one topic per pillar has earned its own drawing. */
+  const figureTopic = active.topics.find((topic) => topic.diagram);
+  const figure = figureTopic?.diagram
+    ? { topic: figureTopic, Diagram: DIAGRAMS[figureTopic.diagram] }
+    : null;
+
   const select = useCallback((id: PillarId) => {
     clearTimeout(hoverTimer.current);
     setActiveId(id);
@@ -389,20 +395,19 @@ export function DoseRoute() {
               </p>
             </header>
 
+            {/* Every card is the same shape. A topic that owns a drawing used
+                to take a double-width slot, which left the grid with a lone
+                half card and a hole beside it — the picture gets its own
+                figure below instead, and the grid stays a grid. */}
             <ul className="mt-6 grid gap-4 sm:grid-cols-2">
               {active.topics.map((topic, index) => {
                 const isLive = liveTopic === topic.slug;
-                const TopicDiagram = topic.diagram ? DIAGRAMS[topic.diagram] : null;
 
                 return (
                   <li
                     key={topic.slug}
                     id={topic.slug}
-                    // A topic with a drawing takes the full row and puts the
-                    // picture beside its text. Stacked under a half-width card
-                    // it triples that card's height for no structural reason;
-                    // shrunk to fit one, its labels stop being legible.
-                    className={cn("card-in scroll-mt-28", TopicDiagram && "sm:col-span-2")}
+                    className="card-in scroll-mt-28"
                     style={{ animationDelay: `${90 + index * 55}ms` }}
                   >
                     <article
@@ -411,39 +416,64 @@ export function DoseRoute() {
                         setLiveTopic((current) => (current === topic.slug ? null : current))
                       }
                       className={cn(
-                        "flex h-full rounded-2xl border-2 bg-card p-5 transition-[border-color,box-shadow,translate] duration-300 ease-out motion-reduce:transition-none",
-                        TopicDiagram ? "flex-col gap-4 sm:flex-row sm:items-center sm:gap-8" : "flex-col",
+                        "flex h-full flex-col rounded-2xl border-2 bg-card p-5 transition-[border-color,box-shadow,translate] duration-300 ease-out motion-reduce:transition-none",
                         isLive
                           ? cn(activeTone.ringSoft, "-translate-y-0.5 shadow-sticker-sm")
                           : "border-ink/12"
                       )}
                     >
-                      <div className="min-w-0 flex-1">
-                        <h4 className="flex items-start gap-2.5 font-display text-[0.95rem] font-bold leading-snug">
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              "mt-[0.42rem] size-1.5 shrink-0 rounded-full transition-transform duration-300 motion-reduce:transition-none",
-                              activeTone.dot,
-                              isLive && "scale-150"
-                            )}
-                          />
-                          {topic.title}
-                        </h4>
-                        <p className="mt-2 pl-4 text-[0.83rem] leading-relaxed text-muted-foreground">
-                          {topic.summary}
-                        </p>
-                      </div>
-                      {TopicDiagram ? (
-                        <div className="shrink-0 text-ink sm:w-[46%]">
-                          <TopicDiagram variant="full" />
-                        </div>
-                      ) : null}
+                      <h4 className="flex items-start gap-2.5 font-display text-[0.95rem] font-bold leading-snug">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "mt-[0.42rem] size-1.5 shrink-0 rounded-full transition-transform duration-300 motion-reduce:transition-none",
+                            activeTone.dot,
+                            isLive && "scale-150"
+                          )}
+                        />
+                        {topic.title}
+                      </h4>
+                      <p className="mt-2 pl-4 text-[0.83rem] leading-relaxed text-muted-foreground">
+                        {topic.summary}
+                      </p>
                     </article>
                   </li>
                 );
               })}
             </ul>
+
+            {figure ? (
+              <figure
+                onMouseEnter={() => setLiveTopic(figure.topic.slug)}
+                onMouseLeave={() =>
+                  setLiveTopic((current) => (current === figure.topic.slug ? null : current))
+                }
+                className={cn(
+                  "card-in mt-4 flex flex-col gap-6 rounded-2xl border-2 bg-card p-5 transition-[border-color] duration-300 lg:flex-row lg:items-center lg:justify-between lg:gap-10 motion-reduce:transition-none",
+                  liveTopic === figure.topic.slug ? activeTone.ringSoft : "border-ink/12"
+                )}
+                style={{ animationDelay: `${90 + active.topics.length * 55}ms` }}
+              >
+                <figcaption className="shrink-0 lg:w-[28%]">
+                  <p className="font-mono text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Figure
+                  </p>
+                  <p className="mt-1.5 font-display text-[0.95rem] font-bold leading-snug">
+                    {figure.topic.title}
+                  </p>
+                  <p className="mt-1 text-[0.8rem] text-muted-foreground">
+                    {figure.topic.tagline}
+                  </p>
+                </figcaption>
+                {/* Capped: left to fill the row this drawing renders ~730px
+                    wide and 420px tall on a 400:232 viewBox, which makes the
+                    figure outweigh the four programmes it illustrates. 30rem
+                    keeps the 11.5px labels legible without that. */}
+                <div className="mx-auto w-full min-w-0 max-w-[30rem] text-ink lg:mx-0">
+                  <figure.Diagram variant="full" />
+                </div>
+              </figure>
+            ) : null}
           </div>
         </div>
       </div>
