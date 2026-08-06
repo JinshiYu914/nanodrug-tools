@@ -31,24 +31,25 @@ function extractLink(
 ): RibogreenLink | null {
   const parsed = parseResultData(row.data);
   if (!parsed) return null;
-  const rowIndex = parsed.rows.findIndex(
-    (r) => r.sourceFormulationId === sampleId
-  );
-  if (rowIndex < 0) return null;
+  const source = parsed.rows.find((r) => r.sourceFormulationId === sampleId);
+  if (!source) return null;
 
   const batch = computeBatch({
     rows: parsed.rows,
     curves: parsed.curves,
     correction: parsed.correction,
   });
-  const computed = batch.samples[rowIndex];
+  // Matched by id rather than by position: computeBatch is index-aligned today,
+  // but silently importing another sample's numbers is the worst way to find
+  // out that ever changed.
+  const computed = batch.samples.find((s) => s.id === source.id);
   if (!computed) return null;
 
   return {
     itemId: row.id,
     itemName: row.name,
     sampleId,
-    sampleName: parsed.rows[rowIndex].name,
+    sampleName: source.name,
     capturedAt: new Date().toISOString(),
     snapshot: {
       total_ng_uL: computed.total_ng_uL,
