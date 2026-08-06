@@ -328,6 +328,23 @@
   }
 }
 
+/* Switching pillars. The panel is keyed on the pillar id, so changing station
+   remounts this subtree and replays both — the header settles, then the cards
+   arrive in order. Without it the swap is a hard cut. */
+@keyframes panel-swap {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
 @layer components {
   /* The ink spine. Drawn once on load.
      `both`, not `forwards`: the later legs carry an animation-delay, and
@@ -357,6 +374,12 @@
   .panel-in {
     animation: panel-in 400ms ease-out 950ms backwards;
   }
+  .panel-swap {
+    animation: panel-swap 320ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  }
+  .card-in {
+    animation: card-in 420ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -369,7 +392,9 @@
   .route-leg-in,
   .station-in,
   .route-fade-in,
-  .panel-in {
+  .panel-in,
+  .panel-swap,
+  .card-in {
     animation: none;
     stroke-dasharray: none;
   }

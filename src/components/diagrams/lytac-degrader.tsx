@@ -72,9 +72,12 @@ export function LytacDegrader({ variant = "full", className }: DiagramProps) {
       </g>
 
       {/* Macrophage */}
+      {/* --card, not --pillar-disease-subtle: at this size a warm tint reads as
+          brown mud against the dark ground. The ruffled outline is what makes
+          it a macrophage anyway. Same rule as ACCENT_CLASS.panel. */}
       <path
         d="M312 62C342 64 364 88 364 118C364 148 340 168 310 166C280 164 260 142 260 114C260 86 282 60 312 62Z"
-        fill="var(--pillar-disease-subtle)"
+        fill="var(--card)"
         stroke="currentColor"
         strokeWidth={STROKE.structure}
       />

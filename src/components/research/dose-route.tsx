@@ -72,26 +72,64 @@ const pct = (value: number, total: number) => `${(value / total) * 100}%`;
 
 export function DoseRoute() {
   const [activeId, setActiveId] = useState<PillarId>("lnp");
-  const [openTopic, setOpenTopic] = useState<string | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  /** Whichever topic the pointer is on, or the one a hash link named. */
+  const [liveTopic, setLiveTopic] = useState<string | null>(null);
+  const [panelHeight, setPanelHeight] = useState<number>();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const activeIndex = PILLARS.findIndex((pillar) => pillar.id === activeId);
   const active = PILLARS[activeIndex] ?? PILLARS[0];
   const activeTone = ACCENT_CLASS[active.accent];
 
   const select = useCallback((id: PillarId) => {
+    clearTimeout(hoverTimer.current);
     setActiveId(id);
-    setOpenTopic(null);
+    setLiveTopic(null);
   }, []);
 
-  const openTopicBySlug = useCallback((slug: string) => {
+  /**
+   * Hover selects, but not instantly. Sweeping the pointer from station 01 to
+   * 03 crosses 02, and without the delay the panel rebuilds itself twice on
+   * the way past. 90ms is under the threshold where a deliberate hover feels
+   * laggy and over the one where a pass-through registers.
+   */
+  const hoverSelect = useCallback(
+    (id: PillarId) => {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = setTimeout(() => select(id), 90);
+    },
+    [select]
+  );
+
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
+  /**
+   * The panel animates between pillars instead of snapping, which means the
+   * container needs a real height to transition. The observed element is in
+   * normal flow inside an overflow-hidden box, so its height never depends on
+   * the height we set — no observer loop.
+   */
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setPanelHeight(entry.target.getBoundingClientRect().height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const goToTopic = useCallback((slug: string) => {
     const match = PILLARS.find((pillar) =>
       pillar.topics.some((topic) => topic.slug === slug)
     );
     if (!match) return;
     setActiveId(match.id);
-    setOpenTopic(slug);
-    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setLiveTopic(slug);
+    requestAnimationFrame(() =>
+      document.getElementById(slug)?.scrollIntoView({ behavior: "smooth", block: "center" })
+    );
   }, []);
 
   /**
@@ -105,7 +143,7 @@ export function DoseRoute() {
   useEffect(() => {
     const apply = () => {
       const slug = window.location.hash.slice(1);
-      if (slug) openTopicBySlug(slug);
+      if (slug) goToTopic(slug);
     };
     const frame = requestAnimationFrame(apply);
     window.addEventListener("hashchange", apply);
@@ -113,15 +151,7 @@ export function DoseRoute() {
       cancelAnimationFrame(frame);
       window.removeEventListener("hashchange", apply);
     };
-  }, [openTopicBySlug]);
-
-  function toggleTopic(slug: string) {
-    const next = openTopic === slug ? null : slug;
-    setOpenTopic(next);
-    // replaceState, not `location.hash = …`: assigning fires hashchange and
-    // makes the browser jump the topic to the top of the viewport.
-    window.history.replaceState(null, "", next ? `#${next}` : window.location.pathname);
-  }
+  }, [goToTopic]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -189,8 +219,8 @@ export function DoseRoute() {
           >
             {BRANCH_Y.map((y, index) => {
               const topic = PILLARS[2].topics[index];
-              const isOpen = openTopic === topic?.slug;
-              const dimmed = activeId === "disease" && openTopic !== null && !isOpen;
+              const isOpen = liveTopic === topic?.slug;
+              const dimmed = activeId === "disease" && liveTopic !== null && !isOpen;
               return (
                 <g
                   key={y}
@@ -226,7 +256,8 @@ export function DoseRoute() {
             <button
               key={pillar.id}
               type="button"
-              onMouseEnter={() => select(pillar.id)}
+              onMouseEnter={() => hoverSelect(pillar.id)}
+              onMouseLeave={() => clearTimeout(hoverTimer.current)}
               onFocus={() => select(pillar.id)}
               onClick={() => select(pillar.id)}
               aria-pressed={isActive}
@@ -334,83 +365,87 @@ export function DoseRoute() {
         })}
       </ol>
 
-      {/* ---- Framework for the station you are pointing at -------------- */}
+      {/* ---- Framework for the station you are pointing at --------------
+           Nothing here is collapsed. The topics used to expand on click, which
+           assumed you knew they were clickable; the summary is short enough to
+           just show. `detail` stays in the content model for the per-topic
+           writeups, but four topics times four sentences is the wall of text
+           this whole section exists to replace.
+
+           The container carries a measured height so switching pillars eases
+           between two sizes instead of jumping the page. */}
       <div
-        ref={panelRef}
-        // min-height is the tallest pillar's natural height (measured: 211 /
-        // 274 / 274px). Without it, sweeping the pointer across the stations
-        // shunts everything below the panel up and down. lg only: the stacked
-        // layout switches on click, so there the resize is something you asked
-        // for, and reserving the space just leaves a hole under two-topic
-        // pillars.
-        className={cn("panel-in sketch-card p-6 sm:p-8 lg:min-h-[17.25rem]", activeTone.panel)}
+        className="panel-in overflow-hidden transition-[height] duration-[420ms] ease-[cubic-bezier(0.2,0.8,0.3,1)] motion-reduce:transition-none"
+        style={{ height: panelHeight }}
       >
-        <h3 className="font-display text-2xl font-extrabold leading-tight tracking-tight">
-          {active.title}
-        </h3>
-        <p className={cn("mt-1.5 text-sm font-medium", activeTone.text)}>
-          {active.question}
-        </p>
+        <div ref={contentRef} className="pb-1">
+          <div key={activeId}>
+            <header className="panel-swap">
+              <h3 className="font-display text-2xl font-extrabold leading-tight tracking-tight">
+                {active.title}
+              </h3>
+              <p className={cn("mt-1.5 text-sm font-medium", activeTone.text)}>
+                {active.question}
+              </p>
+            </header>
 
-        <ul className="mt-6 grid items-start gap-x-8 sm:grid-cols-2">
-          {active.topics.map((topic) => {
-            const isOpen = openTopic === topic.slug;
-            const TopicDiagram = topic.diagram ? DIAGRAMS[topic.diagram] : null;
+            <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+              {active.topics.map((topic, index) => {
+                const isLive = liveTopic === topic.slug;
+                const TopicDiagram = topic.diagram ? DIAGRAMS[topic.diagram] : null;
 
-            return (
-              <li key={topic.slug} id={topic.slug} className="scroll-mt-24">
-                <button
-                  type="button"
-                  onClick={() => toggleTopic(topic.slug)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-start gap-2.5 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "mt-2 size-1.5 shrink-0 rounded-full transition-transform",
-                      activeTone.dot,
-                      isOpen && "scale-150"
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-display text-[0.95rem] font-bold leading-snug">
-                      {topic.title}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {topic.tagline}
-                    </span>
-                  </span>
-                </button>
-
-                <div
-                  className={cn(
-                    "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
-                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                  )}
-                >
-                  <div className="overflow-hidden">
-                    <ul className="flex flex-col gap-2 pb-4 pl-6 pr-1">
-                      {topic.detail.map((point) => (
-                        <li
-                          key={point}
-                          className="text-[0.82rem] leading-relaxed text-muted-foreground"
-                        >
-                          {point}
-                        </li>
-                      ))}
-                    </ul>
-                    {TopicDiagram ? (
-                      <div className="pb-4 pl-6 pr-1 text-ink">
-                        <TopicDiagram variant="full" className="max-w-sm" />
+                return (
+                  <li
+                    key={topic.slug}
+                    id={topic.slug}
+                    // A topic with a drawing takes the full row and puts the
+                    // picture beside its text. Stacked under a half-width card
+                    // it triples that card's height for no structural reason;
+                    // shrunk to fit one, its labels stop being legible.
+                    className={cn("card-in scroll-mt-28", TopicDiagram && "sm:col-span-2")}
+                    style={{ animationDelay: `${90 + index * 55}ms` }}
+                  >
+                    <article
+                      onMouseEnter={() => setLiveTopic(topic.slug)}
+                      onMouseLeave={() =>
+                        setLiveTopic((current) => (current === topic.slug ? null : current))
+                      }
+                      className={cn(
+                        "flex h-full rounded-2xl border-2 bg-card p-5 transition-[border-color,box-shadow,translate] duration-300 ease-out motion-reduce:transition-none",
+                        TopicDiagram ? "flex-col gap-4 sm:flex-row sm:items-center sm:gap-8" : "flex-col",
+                        isLive
+                          ? cn(activeTone.ringSoft, "-translate-y-0.5 shadow-sticker-sm")
+                          : "border-ink/12"
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <h4 className="flex items-start gap-2.5 font-display text-[0.95rem] font-bold leading-snug">
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "mt-[0.42rem] size-1.5 shrink-0 rounded-full transition-transform duration-300 motion-reduce:transition-none",
+                              activeTone.dot,
+                              isLive && "scale-150"
+                            )}
+                          />
+                          {topic.title}
+                        </h4>
+                        <p className="mt-2 pl-4 text-[0.83rem] leading-relaxed text-muted-foreground">
+                          {topic.summary}
+                        </p>
                       </div>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                      {TopicDiagram ? (
+                        <div className="shrink-0 text-ink sm:w-[46%]">
+                          <TopicDiagram variant="full" />
+                        </div>
+                      ) : null}
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

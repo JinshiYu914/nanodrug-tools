@@ -49,10 +49,12 @@ export function DiseaseProgrammes({ variant = "full", className }: DiagramProps)
         </>
       ) : null}
 
-      {/* Cell — an uneven blob, not a circle */}
+      {/* Cell — an uneven blob, not a circle. Filled with --card rather than
+          the pillar tint: it is a third of the drawing, and a warm fill that
+          large goes muddy in dark mode. */}
       <path
         d="M148 62c40 2 68 33 66 74-2 40-33 66-72 63-38-3-63-33-61-71 2-39 31-68 67-66Z"
-        fill="var(--pillar-disease-subtle)"
+        fill="var(--card)"
         stroke="currentColor"
         strokeWidth={STROKE.structure}
       />

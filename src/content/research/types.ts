@@ -8,13 +8,17 @@ export type TopicMeta = {
   /** Also the DOM id — topics are deep-linked by hash, not by route. */
   slug: string;
   title: string;
-  /** One clause, sentence case. Sits under the title on the card. */
+  /** One clause, sentence case. The compressed form of `summary`. */
   tagline: string;
-  /** One or two sentences. Visible before the card is expanded. */
+  /** One or two sentences. This is the card body on the homepage. */
   summary: string;
-  /** Revealed on expand. Two to four sentences, each its own point. */
+  /**
+   * Two to four sentences, each its own point. Not on the homepage — four
+   * topics times four sentences is the wall of text the route replaced. Kept
+   * for the per-topic writeups the owner is adding later.
+   */
   detail: string[];
-  /** Optional — shown inside the expanded card when a topic earns its own drawing. */
+  /** Optional — drawn inside the card when a topic earns its own picture. */
   diagram?: DiagramId;
   keywords: string[];
   status: "active" | "planned";
@@ -50,7 +54,7 @@ export type Pillar = {
  */
 export const ACCENT_CLASS: Record<
   PillarAccent,
-  { text: string; bg: string; panel: string; dot: string; ring: string }
+  { text: string; bg: string; panel: string; dot: string; ring: string; ringSoft: string }
 > = {
   lnp: {
     text: "text-pillar-lnp",
@@ -58,6 +62,7 @@ export const ACCENT_CLASS: Record<
     panel: "[--sketch-border-color:var(--pillar-lnp)]",
     dot: "bg-pillar-lnp",
     ring: "border-pillar-lnp",
+    ringSoft: "border-pillar-lnp/45",
   },
   utr: {
     text: "text-pillar-utr",
@@ -65,6 +70,7 @@ export const ACCENT_CLASS: Record<
     panel: "[--sketch-border-color:var(--pillar-utr)]",
     dot: "bg-pillar-utr",
     ring: "border-pillar-utr",
+    ringSoft: "border-pillar-utr/45",
   },
   disease: {
     text: "text-pillar-disease",
@@ -72,5 +78,6 @@ export const ACCENT_CLASS: Record<
     panel: "[--sketch-border-color:var(--pillar-disease)]",
     dot: "bg-pillar-disease",
     ring: "border-pillar-disease",
+    ringSoft: "border-pillar-disease/45",
   },
 };
