@@ -8,7 +8,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { LineChart, Calculator } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeftRight, Boxes, LineChart, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ import { describeError } from "./use-ribogreen-saved";
 import {
   cloneCurvePair,
   computeBatch,
+  createBlankSample,
   createCurvePair,
   createDefaultCorrection,
   createInitialSamples,
@@ -49,6 +51,13 @@ import {
   type CurvePair,
   type SampleRow,
 } from "@/lib/calculations/ribogreen";
+import { parseTlnpExperiment } from "@/lib/calculations/tlnp-experiment";
+import { systemName } from "@/lib/calculations/tlnp-conjugation";
+import {
+  returnUrl,
+  STAGE_LABELS,
+  type TlnpHandoff,
+} from "@/lib/calculations/tlnp-handoff";
 import type { InstrumentKey } from "@/lib/calculations/ribogreen-presets";
 import {
   createItem,
@@ -68,6 +77,8 @@ interface RibogreenModeProps {
   /** Record the screening tab asked us to load, e.g. from a bench card link. */
   pendingRecord?: { itemId: string; token: number } | null;
   onPendingRecordHandled?: () => void;
+  /** A tLNP batch sent us over to measure its samples. */
+  tlnpHandoff?: TlnpHandoff | null;
 }
 
 export default function RibogreenMode({
@@ -75,7 +86,9 @@ export default function RibogreenMode({
   onOpenFormulation,
   pendingRecord,
   onPendingRecordHandled,
+  tlnpHandoff,
 }: RibogreenModeProps) {
+  const router = useRouter();
   // This component is force-mounted so the sample grid survives tab switches,
   // which would otherwise make the records panel hit Supabase on every page
   // load. Latch on first activation instead: mount it once the tab has been
@@ -97,6 +110,17 @@ export default function RibogreenMode({
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const [activeResultName, setActiveResultName] = useState("");
   const [recordsRefresh, setRecordsRefresh] = useState(0);
+
+  /** Set once the handoff has been resolved to a real batch — drives the
+   *  return banner. Kept separate from the incoming prop so a failed lookup
+   *  doesn't leave a banner pointing at nothing. */
+  const [handoff, setHandoff] = useState<{
+    batchId: string;
+    batchName: string;
+    stage: TlnpHandoff["stage"];
+    count: number;
+  } | null>(null);
+  const [returning, setReturning] = useState(false);
 
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -180,6 +204,115 @@ export default function RibogreenMode({
       cancelled = true;
     };
   }, [pendingRecord, applyRecord, onPendingRecordHandled]);
+
+  // A tLNP batch sent us its sample names. Seed one column per sample, already
+  // linked back, so the user only has to paste readings.
+  useEffect(() => {
+    if (!tlnpHandoff) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const item = await getItem(tlnpHandoff.batchId);
+        if (cancelled) return;
+        if (!item) {
+          toast.error("找不到该 tLNP 批次");
+          return;
+        }
+        const parsed = parseTlnpExperiment(item.data);
+        const targets =
+          tlnpHandoff.stage === "purify"
+            ? parsed.conjugation.systems.map((s, i) => ({
+                id: s.id,
+                name: systemName(s, i),
+              }))
+            : parsed.prep.samples.map((s, i) => ({
+                id: s.id,
+                name: s.name || `样品 ${i + 1}`,
+              }));
+
+        if (targets.length === 0) {
+          toast.error(
+            tlnpHandoff.stage === "purify"
+              ? "该批次还没有反应体系"
+              : "该批次还没有样品"
+          );
+          return;
+        }
+
+        setRows(
+          targets.map((t) => ({
+            ...createBlankSample(),
+            name: t.name,
+            sourceSessionId: item.id,
+            sourceSessionName: item.name,
+            sourceFormulationId: t.id,
+            sourceKind: "tlnp_experiment" as const,
+          }))
+        );
+        setActiveResultId(null);
+        setActiveResultName("");
+        setHandoff({
+          batchId: item.id,
+          batchName: item.name,
+          stage: tlnpHandoff.stage,
+          count: targets.length,
+        });
+        toast.success(`已载入「${item.name}」的 ${targets.length} 个样品名`);
+      } catch (e) {
+        console.error(e);
+        toast.error(describeError(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tlnpHandoff]);
+
+  /**
+   * Save what's on screen and go back to the batch that sent us.
+   *
+   * Saving first is what makes the return meaningful: the workbench imports by
+   * record id, and refits from the stored curve rather than trusting anything
+   * carried across in the URL.
+   */
+  async function handleReturnToTlnp() {
+    if (!handoff) return;
+    setReturning(true);
+    try {
+      const payload = serializeResult({
+        experimentDate: experimentDate || todayISO(),
+        instrument,
+        curves,
+        rows,
+        correction,
+      }) as unknown as Record<string, unknown>;
+
+      let recordId = activeResultId;
+      if (recordId) {
+        await updateItemData(recordId, payload);
+      } else {
+        const name = `RiboGreen · ${handoff.batchName} · ${experimentDate || todayISO()}`;
+        const row = await createItem({
+          type: "ribogreen_result",
+          is_folder: false,
+          parent_id: null,
+          name,
+          data: payload,
+          sort_order: 0,
+        });
+        recordId = row.id;
+        setActiveResultId(row.id);
+        setActiveResultName(name);
+      }
+      setRecordsRefresh((n) => n + 1);
+      router.push(returnUrl(handoff.batchId, handoff.stage, recordId));
+    } catch (e) {
+      console.error(e);
+      toast.error(describeError(e));
+    } finally {
+      setReturning(false);
+    }
+  }
 
   function handleInstrumentChange(key: InstrumentKey) {
     if (key === instrument) return;
@@ -266,6 +399,32 @@ export default function RibogreenMode({
 
   return (
     <div className="space-y-6">
+      {/* ═══ 0. tLNP 工作台往返 ═════════════════════════ */}
+      {handoff && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center gap-3 py-4">
+            <Boxes className="h-5 w-5 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                来自 tLNP 批次「{handoff.batchName}」·{" "}
+                {STAGE_LABELS[handoff.stage]}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                已填入 {handoff.count} 个样品名。填好标准曲线和读数后，点右侧按钮保存并带着结果回到工作台。
+              </p>
+            </div>
+            <Button
+              className="gap-2"
+              onClick={() => void handleReturnToTlnp()}
+              disabled={returning}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              {returning ? "保存中..." : "导入结果并返回 tLNP 工作台"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══ 1. 标准曲线 ═══════════════════════════════ */}
       <Card>
         <CardHeader>

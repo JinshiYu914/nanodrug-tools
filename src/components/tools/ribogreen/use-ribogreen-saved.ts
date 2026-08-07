@@ -14,8 +14,15 @@ import {
 /**
  * Supabase surfaces failures as PostgrestError — a plain object, not an Error
  * instance — so String(e) would only ever yield "[object Object]".
+ *
+ * `migrationHint` names the migration that widens the type check constraint for
+ * whatever kind of row the caller is writing: 23514 means the row's `type` isn't
+ * in the constraint yet, and the only fix is running that specific file.
  */
-export function describeError(e: unknown): string {
+export function describeError(
+  e: unknown,
+  migrationHint = "003_ribogreen.sql"
+): string {
   const o = (e ?? {}) as Record<string, unknown>;
   const msg = [
     e instanceof Error ? e.message : "",
@@ -30,7 +37,7 @@ export function describeError(e: unknown): string {
     return "数据表尚未创建，请先运行 SQL 迁移";
   }
   if (msg.includes("23514") || msg.includes("violates check constraint")) {
-    return "请先在 Supabase 执行 003_ribogreen.sql 迁移";
+    return `请先在 Supabase 执行 ${migrationHint} 迁移`;
   }
   return "操作失败";
 }

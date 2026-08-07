@@ -319,16 +319,18 @@ function applyStyles(ws: XLSX.WorkSheet, rowCount: number): void {
   }
 }
 
-// ─── Public entry point ───────────────────────────────────────────────────
+// ─── Public entry points ──────────────────────────────────────────────────
 
-export function exportBenchToXlsx(
-  sessionName: string,
-  createdAt: string,
-  updatedAt: string,
+/**
+ * The 配方 worksheet on its own — one row per formulation, fully styled.
+ *
+ * Split out of exportBenchToXlsx so the tLNP batch report can drop the exact
+ * same sheet into a bigger workbook. Both callers must keep producing an
+ * identical sheet; the screening export is the reference.
+ */
+export function buildBenchSheet(
   formulations: BenchFormulation[]
-): void {
-  if (formulations.length === 0) return;
-
+): XLSX.WorkSheet {
   const { aoa, merges } = buildAoa(formulations);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!merges"] = merges;
@@ -357,6 +359,18 @@ export function exportBenchToXlsx(
   ws["!rows"] = [{ hpt: 20 }, { hpt: 30 }];
 
   applyStyles(ws, aoa.length);
+  return ws;
+}
+
+export function exportBenchToXlsx(
+  sessionName: string,
+  createdAt: string,
+  updatedAt: string,
+  formulations: BenchFormulation[]
+): void {
+  if (formulations.length === 0) return;
+
+  const ws = buildBenchSheet(formulations);
 
   const meta = XLSX.utils.aoa_to_sheet([
     ["筛选会话", sessionName],
@@ -379,26 +393,27 @@ export function exportBenchToXlsx(
 }
 
 // ─── Date / filename helpers ──────────────────────────────────────────────
+// Exported so the tLNP report exporter stamps its files the same way.
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function formatIso(iso: string): string {
+export function formatIso(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function formatNow(): string {
+export function formatNow(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function datestamp(): string {
+export function datestamp(): string {
   const d = new Date();
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
-function sanitizeFilename(name: string): string {
-  return name.replace(/[\\/:*?"<>|]+/g, "_").trim() || "lnp-screening";
+export function sanitizeFilename(name: string, fallback = "lnp-screening"): string {
+  return name.replace(/[\\/:*?"<>|]+/g, "_").trim() || fallback;
 }

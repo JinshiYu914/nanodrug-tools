@@ -243,12 +243,15 @@ export interface SampleRow {
   rnaInput: string;
   /** 需取用 LNP-RNA 量 (µg) — optional, for 取样体积 */
   needMass: string;
-  /** Screening session this sample's formulation came from, if any. */
+  /** Screening session or tLNP batch this sample's formulation came from. */
   sourceSessionId?: string;
   /** Denormalized so the link still reads if the session is renamed/removed. */
   sourceSessionName?: string;
   /** Formulation id inside that session's bench — the jump target. */
   sourceFormulationId?: string;
+  /** Which kind of row `sourceSessionId` points at. Absent on rows saved
+   *  before tLNP batches existed, which were all screening sessions. */
+  sourceKind?: "screening_session" | "tlnp_experiment";
 }
 
 /** Fields the batch-fill dialog can write across many samples at once. */
@@ -902,6 +905,9 @@ export function parseResultData(
         : {}),
       ...(typeof o.sourceFormulationId === "string"
         ? { sourceFormulationId: o.sourceFormulationId }
+        : {}),
+      ...(o.sourceKind === "tlnp_experiment" || o.sourceKind === "screening_session"
+        ? { sourceKind: o.sourceKind }
         : {}),
     };
   });
