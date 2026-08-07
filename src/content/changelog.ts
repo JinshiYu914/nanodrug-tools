@@ -28,6 +28,43 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.9.0",
+    date: "2026-08-07",
+    title: "tLNP 制备工作台",
+    summary:
+      "按批次记录靶向 LNP 的完整链路：LNP 制备 → 偶联反应 → LNP 纯化 → 体内外实验。每一步都分实验设计与实验结果，可随时导出、跨批次对比。",
+    changes: [
+      {
+        kind: "feature",
+        text: "新增 tLNP 制备工作台（需登录）：一个批次记录一次完整实验，四个模块各自记录日期与操作人，左侧可用文件夹整理批次。",
+      },
+      {
+        kind: "feature",
+        text: "LNP 制备：多样品配方表一行一个样品，配方直接复用 LNP Calculator 的算法与 PDF / Excel 导出；表征结果改成矩阵，一行一个样品，包含 RiboGreen 浓度 / 体积 / 包封率 / 得率、DLS 粒径 / PDI / Zeta、是否有 TEM 与备注。",
+      },
+      {
+        kind: "feature",
+        text: "与 RiboGreen 打通：点「输入酶标仪检测结果开始计算」跳到 RiboGreen 标签页，样本名已按批次填好，测完点「导入结果并返回」把数值带回工作台。工作台不另做一份计算器，两边永远是同一套算法。",
+      },
+      {
+        kind: "feature",
+        text: "偶联反应：抗体信息可存进抗体库供所有批次调用；反应体系写成矩阵，一列一个体系（LNP 浓度、投料 LNP-RNA 量、linker 比例），一行一项反应条件；加样体系每个体系单独算，并附上从投料量到抗体体积的完整计算过程。摩尔比按 linker（如 DSPE-PEG2k-mal）: 抗体 计算。",
+      },
+      {
+        kind: "feature",
+        text: "LNP 纯化：CL-4B 的柱长 / 柱径 / 流速 / buffer 可存为预设供所有批次调用；层析数据复制粘贴即出峰图，通道显示为 A280 / A260，可标注收集峰段并重新编辑原始数据。",
+      },
+      {
+        kind: "feature",
+        text: "体内外实验：体外结果一列一个样本、一行一次重复，可直接从 Excel 粘贴与复制，自动生成均值 ± SD 柱状图，支持 Luciferase 与荧光蛋白（MFI / 阳性率）两种定量；体内成像结果可建多组分别命名，粘贴 样本名 / 器官 / Total ROI / Avg ROI 四列后自动出 Total ROI、Avg ROI 与肝脾占比三张图。",
+      },
+      {
+        kind: "feature",
+        text: "总览与导出：整批次 PDF（含画出来的层析峰图）、十一张表的 Excel、以及无损的 JSON；另可同时对比最多四个批次的关键设计与结果。",
+      },
+    ],
+  },
+  {
     version: "v0.8.0",
     date: "2026-08-06",
     title: "LNP Calculator：配方与包封率打通",
