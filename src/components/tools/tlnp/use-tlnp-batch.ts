@@ -64,7 +64,11 @@ export function useTlnpBatch(): TlnpBatchState {
       setLastSavedAt(new Date());
       setRefreshToken((t) => t + 1);
     } catch (e) {
-      console.error(e);
+      // Deliberately not console.error: a failed autosave is an expected,
+      // recoverable condition (offline, migration not applied) and the toast is
+      // the real report. console.error would additionally raise it in Next's
+      // dev overlay as an unhandled issue, which it isn't.
+      console.warn("[tlnp] 自动保存失败", e);
       toast.error(describeError(e, "004_tlnp_experiment.sql"));
     }
   }, []);

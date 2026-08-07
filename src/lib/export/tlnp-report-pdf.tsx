@@ -31,11 +31,15 @@ import {
   systemName,
 } from "@/lib/calculations/tlnp-conjugation";
 import {
+  invitroUnitLabel,
   PURIFICATION_METHOD_LABELS,
   resolveEe,
   summarizeBatch,
+  summarizeInVitro,
+  type AssayDesign,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
+import { liverSpleenRatio } from "@/lib/calculations/tlnp-roi";
 import { ensureCjkFonts } from "./pdf-fonts";
 
 /**
@@ -341,6 +345,51 @@ function Note({ label, text }: { label: string; text: string }) {
   );
 }
 
+/**
+ * One arm of module 4: its parameter bench printed as a meta grid, then
+ * whatever the caller renders for the results.
+ *
+ * The design fields are iterated rather than listed, because the bench is
+ * open-ended — a user-added parameter has to print on a build that has never
+ * heard of it, which is the same rule ParamEntry lives by everywhere else.
+ */
+function AssayArm({
+  label,
+  design,
+  children,
+}: {
+  label: string;
+  design: AssayDesign;
+  children: React.ReactNode;
+}) {
+  const filled = design.params.filter((p) => p.value.trim() !== "");
+  const hasChildren = Array.isArray(children)
+    ? children.some(Boolean)
+    : !!children;
+  if (filled.length === 0 && !design.date && !hasChildren) return null;
+
+  return (
+    <View style={{ marginBottom: 4 }}>
+      <Text style={{ fontSize: 8.5, fontWeight: 700, marginTop: 3 }}>
+        {label}
+        {design.date ? ` · ${design.date}` : ""}
+      </Text>
+      {filled.length > 0 && (
+        <View style={styles.metaGrid}>
+          {filled.map((p) => (
+            <View key={p.id} style={styles.metaCell}>
+              <Text style={styles.metaLabel}>{p.label}</Text>
+              <Text style={styles.metaValue}>{p.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      <Note label="设计备注" text={design.note} />
+      {children}
+    </View>
+  );
+}
+
 /** Exported so the document can be rendered headlessly without a DOM. */
 export function TlnpReportDocument({
   batchName,
@@ -354,6 +403,11 @@ export function TlnpReportDocument({
   d: TlnpExperimentData;
 }) {
   const s = summarizeBatch(d);
+  const vitroStats = summarizeInVitro(d.assay.invitro.results).filter(
+    (c) => c.values.length > 0
+  );
+  const vitroUnit = invitroUnitLabel(d.assay.invitro.results);
+  const liverSpleen = liverSpleenRatio(d.assay.invivo.results.rows);
   const fmtDate = (iso: string) => {
     const x = new Date(iso);
     const p = (v: number) => String(v).padStart(2, "0");
@@ -456,7 +510,7 @@ export function TlnpReportDocument({
               <Row
                 head
                 widths={["34%", "22%", "22%", "22%"]}
-                cells={["蛋白", "分子量 (Da)", "浓度", "备注"]}
+                cells={["抗体", "分子量 (Da)", "浓度", "备注"]}
               />
               {d.conjugation.proteins.map((p, i) => (
                 <Row
@@ -481,16 +535,16 @@ export function TlnpReportDocument({
             <View style={styles.table}>
               <Row
                 head
-                widths={["16%", "14%", "12%", "12%", "12%", "12%", "10%", "12%"]}
+                widths={["15%", "13%", "12%", "12%", "12%", "12%", "12%", "12%"]}
                 cells={[
                   "反应体系",
-                  "蛋白",
-                  "linker:蛋白",
+                  "抗体",
+                  "linker:抗体",
+                  "投料 RNA (µg)",
                   "LNP (µL)",
-                  "蛋白 (µL)",
+                  "抗体 (µL)",
                   "buffer (µL)",
                   "总 (µL)",
-                  "温度/时间",
                 ]}
               />
               {d.conjugation.systems.map((sys, i) => {
@@ -499,21 +553,48 @@ export function TlnpReportDocument({
                 return (
                   <Row
                     key={sys.id}
-                    widths={["16%", "14%", "12%", "12%", "12%", "12%", "10%", "12%"]}
+                    widths={["15%", "13%", "12%", "12%", "12%", "12%", "12%", "12%"]}
                     cells={[
                       systemName(sys, i),
                       proteinName(protein) || "--",
                       sys.molarRatio ? `1:${sys.molarRatio}` : "--",
+                      n(dose.rnaMass_ug, 2),
                       formatVolume(dose.lnpVolume_uL),
                       formatVolume(dose.proteinVolume_uL),
                       formatVolume(dose.bufferVolume_uL),
                       formatVolume(dose.totalVolume_uL),
-                      [sys.temperature, sys.duration].filter(Boolean).join(" / ") ||
-                        "--",
                     ]}
                   />
                 );
               })}
+            </View>
+          )}
+
+          {/* Reaction conditions ride in their own table rather than a
+              温度/时间 column: three fields in one cell wraps to three lines
+              and pushes every other row out of alignment. */}
+          {d.conjugation.systems.some(
+            (s) => s.temperature || s.duration || s.shaking || s.reactionBuffer
+          ) && (
+            <View style={styles.table}>
+              <Row
+                head
+                widths={["28%", "18%", "18%", "18%", "18%"]}
+                cells={["反应体系", "温度", "时间", "摇床", "反应 buffer"]}
+              />
+              {d.conjugation.systems.map((sys, i) => (
+                <Row
+                  key={sys.id}
+                  widths={["28%", "18%", "18%", "18%", "18%"]}
+                  cells={[
+                    systemName(sys, i),
+                    sys.temperature || "--",
+                    sys.duration || "--",
+                    sys.shaking || "--",
+                    sys.reactionBuffer || "--",
+                  ]}
+                />
+              ))}
             </View>
           )}
 
@@ -635,7 +716,6 @@ export function TlnpReportDocument({
               })}
             </View>
           )}
-          <Note label="TEM" text={d.purification.results.tem.note} />
           <Note label="结果与讨论" text={d.purification.results.discussion} />
         </Section>
 
@@ -651,72 +731,89 @@ export function TlnpReportDocument({
 
         {/* ── 4 体内外实验 ── */}
         <Section title="4  体内外实验">
-          {(["invitro", "invivo"] as const).map((arm) => {
-            const block = d.assay[arm];
-            const label = arm === "invitro" ? "体外" : "体内";
-            const design =
-              arm === "invitro"
-                ? [
-                    ["细胞系", d.assay.invitro.design.cellLine],
-                    ["代数", d.assay.invitro.design.passage],
-                    ["孔板", d.assay.invitro.design.plate],
-                    ["细胞密度", d.assay.invitro.design.seedingDensity],
-                    ["剂量", d.assay.invitro.design.dose],
-                    ["时间点", d.assay.invitro.design.timepoints],
-                  ]
-                : [
-                    ["动物", d.assay.invivo.design.species],
-                    ["品系", d.assay.invivo.design.strain],
-                    ["给药途径", d.assay.invivo.design.route],
-                    ["剂量", d.assay.invivo.design.dose],
-                    ["分组", d.assay.invivo.design.groups],
-                    ["时间点", d.assay.invivo.design.timepoints],
-                  ];
-            const hasAny =
-              design.some(([, v]) => v.trim() !== "") ||
-              block.results.rows.length > 0 ||
-              block.results.discussion.trim() !== "";
-            if (!hasAny) return null;
-
-            return (
-              <View key={arm} style={{ marginBottom: 4 }}>
-                <Text style={{ fontSize: 8.5, fontWeight: 700, marginTop: 3 }}>
-                  {label}
-                </Text>
-                <View style={styles.metaGrid}>
-                  {design.map(([l, v]) => (
-                    <View key={l} style={styles.metaCell}>
-                      <Text style={styles.metaLabel}>{l}</Text>
-                      <Text style={styles.metaValue}>{v || "--"}</Text>
-                    </View>
-                  ))}
-                </View>
-                {block.results.rows.length > 0 && (
-                  <View style={styles.table}>
-                    <Row
-                      head
-                      widths={["30%", "18%", "18%", "14%", "20%"]}
-                      cells={["样本", "分组", "数值", "单位", "备注"]}
-                    />
-                    {block.results.rows.map((r) => (
-                      <Row
-                        key={r.id}
-                        widths={["30%", "18%", "18%", "14%", "20%"]}
-                        cells={[
-                          r.label || "--",
-                          r.group || "--",
-                          r.value || "--",
-                          r.unit || "",
-                          r.note || "",
-                        ]}
-                      />
-                    ))}
-                  </View>
-                )}
-                <Note label="结果分析" text={block.results.discussion} />
+          <AssayArm label="体外" design={d.assay.invitro.design}>
+            {vitroStats.length > 0 && (
+              <View style={styles.table}>
+                <Row
+                  head
+                  widths={["34%", "22%", "22%", "22%"]}
+                  cells={[
+                    "样本",
+                    `均值 (${vitroUnit})`,
+                    `SD (${vitroUnit})`,
+                    "n",
+                  ]}
+                />
+                {vitroStats.map((s) => (
+                  <Row
+                    key={s.id}
+                    widths={["34%", "22%", "22%", "22%"]}
+                    cells={[
+                      s.name,
+                      n(s.mean, 2),
+                      n(s.sd, 2),
+                      String(s.values.length),
+                    ]}
+                  />
+                ))}
               </View>
-            );
-          })}
+            )}
+            <Note
+              label="结果分析"
+              text={d.assay.invitro.results.discussion}
+            />
+          </AssayArm>
+
+          <AssayArm label="体内" design={d.assay.invivo.design}>
+            {d.assay.invivo.results.rows.length > 0 && (
+              <View style={styles.table}>
+                <Row
+                  head
+                  widths={["28%", "18%", "27%", "27%"]}
+                  cells={[
+                    "样本",
+                    "器官",
+                    "Total ROI (p/s)",
+                    "Avg ROI (p/s/cm²/sr)",
+                  ]}
+                />
+                {d.assay.invivo.results.rows.map((r) => (
+                  <Row
+                    key={r.id}
+                    widths={["28%", "18%", "27%", "27%"]}
+                    cells={[
+                      r.sample || "--",
+                      r.organ || "--",
+                      r.totalRoi || "--",
+                      r.avgRoi || "--",
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+            {liverSpleen.length > 0 && (
+              <View style={styles.table}>
+                <Row
+                  head
+                  widths={["40%", "20%", "20%", "20%"]}
+                  cells={["样本", "肝占比", "脾占比", "肝/脾"]}
+                />
+                {liverSpleen.map((b) => (
+                  <Row
+                    key={b.sample}
+                    widths={["40%", "20%", "20%", "20%"]}
+                    cells={[
+                      b.sample,
+                      b.liver.toFixed(2),
+                      b.spleen.toFixed(2),
+                      isFinite(b.ratio) ? b.ratio.toFixed(2) : "--",
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+            <Note label="结果分析" text={d.assay.invivo.results.discussion} />
+          </AssayArm>
         </Section>
       </Page>
     </Document>

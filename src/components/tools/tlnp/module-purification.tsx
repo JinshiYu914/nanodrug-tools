@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   Columns3,
-  Image as ImageIcon,
   MessageSquare,
   Pencil,
   Plus,
@@ -409,8 +408,8 @@ export default function ModulePurification({ data, update, batchId }: Props) {
             />
           </div>
           <CardDescription>
-            一行一个反应体系，与「LNP 制备」用同一套 RiboGreen 计算 ——
-            点「输入样品数值计算」过去测完带回来，或直接填写。
+            一行一个反应体系，与「LNP 制备」用同一套 RiboGreen
+            计算——点右上角的按钮过去测完带回来，或直接填写。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -436,64 +435,6 @@ export default function ModulePurification({ data, update, batchId }: Props) {
             }}
             emptyHint="「偶联反应」里建立反应体系后，这里会逐个记录纯化后的表征结果。"
           />
-
-          <div className="space-y-2 rounded-lg border p-3">
-            <p className="flex items-center gap-1.5 text-xs font-medium">
-              <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-              TEM 图片
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Field label="图片链接">
-                <Input
-                  value={pur.results.tem.imageUrl}
-                  onChange={(e) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        tem: { ...p.results.tem, imageUrl: e.target.value },
-                      },
-                    }))
-                  }
-                  placeholder="https://..."
-                  className="h-8 px-2 text-xs"
-                />
-              </Field>
-              <Field label="放大倍数">
-                <Input
-                  value={pur.results.tem.magnification}
-                  onChange={(e) =>
-                    setPur((p) => ({
-                      ...p,
-                      results: {
-                        ...p.results,
-                        tem: { ...p.results.tem, magnification: e.target.value },
-                      },
-                    }))
-                  }
-                  placeholder="例如 50,000×"
-                  className="h-8 px-2 text-xs"
-                />
-              </Field>
-            </div>
-            <Input
-              value={pur.results.tem.note}
-              onChange={(e) =>
-                setPur((p) => ({
-                  ...p,
-                  results: {
-                    ...p.results,
-                    tem: { ...p.results.tem, note: e.target.value },
-                  },
-                }))
-              }
-              placeholder="形貌描述，例如 球形均一，未见明显聚集"
-              className="h-8 px-2 text-xs"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              哪些体系拍了 TEM 记在上表；这里放整体的图片链接与形貌描述。直接上传会在后续版本加上。
-            </p>
-          </div>
         </CardContent>
       </Card>
 
@@ -513,7 +454,7 @@ export default function ModulePurification({ data, update, batchId }: Props) {
                 results: { ...p.results, discussion: e.target.value },
               }))
             }
-            placeholder="例如：CL4B 第一个峰是 tLNP，第二个峰是游离蛋白，分离度良好"
+            placeholder="例如：CL4B 第一个峰是 tLNP，第二个峰是游离抗体，分离度良好"
             className="min-h-32 text-sm"
           />
         </CardContent>

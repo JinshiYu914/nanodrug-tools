@@ -29,12 +29,12 @@ interface Props {
 }
 
 /**
- * Module 2 — 蛋白 → 反应体系矩阵 → 加样体系, then what the unpurified product
+ * Module 2 — 抗体 → 反应体系矩阵 → 加样体系, then what the unpurified product
  * looked like.
  *
- * The three design cards are one pipeline read top to bottom: a protein has to
- * exist before a column can point at it, and a column has to exist before there
- * is a volume to pipette.
+ * The three design cards are one pipeline read top to bottom: an antibody has
+ * to exist before a column can point at it, and a column has to exist before
+ * there is a volume to pipette.
  */
 export default function ModuleConjugation({ data, update }: Props) {
   const conj = data.conjugation;
@@ -87,7 +87,7 @@ export default function ModuleConjugation({ data, update }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Beaker className="h-4 w-4 text-accent-utility" />
-              <CardTitle className="text-base">蛋白信息</CardTitle>
+              <CardTitle className="text-base">抗体信息</CardTitle>
             </div>
             <ModuleDate
               value={conj.design.date}
@@ -95,7 +95,7 @@ export default function ModuleConjugation({ data, update }: Props) {
             />
           </div>
           <CardDescription>
-            本批次用到的偶联蛋白。填一次即可存进蛋白库，之后所有批次都能直接选用。
+            本批次用到的偶联抗体。填一次即可存进抗体库，之后所有批次都能直接选用。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -110,8 +110,8 @@ export default function ModuleConjugation({ data, update }: Props) {
             <CardTitle className="text-base">反应体系</CardTitle>
           </div>
           <CardDescription>
-            每一列是一个反应体系，默认取上一步制备好的 LNP（浓度、体积、linker
-            比例都会带过来）；每一行是一项反应条件。摩尔比按 linker : 蛋白 计，
+            每一列是一个反应体系，默认取上一步制备好的 LNP（浓度、投料量、linker
+            比例都会带过来）；每一行是一项反应条件。摩尔比按 linker : 抗体 计，
             这是真正参与反应的基团数。
           </CardDescription>
         </CardHeader>
@@ -131,10 +131,7 @@ export default function ModuleConjugation({ data, update }: Props) {
             <Syringe className="h-4 w-4 text-accent-utility" />
             <CardTitle className="text-base">加样体系</CardTitle>
           </div>
-          <CardDescription>
-            每个体系单独算。填入总体积后，反应 buffer 的补加量就是扣掉 LNP
-            和蛋白之后剩下的体积。
-          </CardDescription>
+          <CardDescription>每个体系单独算，并附上计算过程。</CardDescription>
         </CardHeader>
         <CardContent>
           <DosingBoxes
@@ -185,7 +182,7 @@ export default function ModuleConjugation({ data, update }: Props) {
                 results: { ...c.results, discussion: e.target.value },
               }))
             }
-            placeholder="例如：1:2 组反应后明显浑浊，可能是蛋白过量导致聚集；1:1 组外观正常"
+            placeholder="例如：1:2 组反应后明显浑浊，可能是抗体过量导致聚集；1:1 组外观正常"
             className="min-h-32 text-sm"
           />
         </CardContent>

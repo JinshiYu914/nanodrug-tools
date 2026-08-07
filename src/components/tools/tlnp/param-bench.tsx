@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import Chip from "./chip";
 import {
   createCustomParam,
+  joinMulti,
+  splitMulti,
   type ParamEntry,
 } from "@/lib/calculations/tlnp-params";
 
@@ -25,7 +27,9 @@ interface Props {
  * inputs:
  *
  * - Clicking a chip sets the value; clicking the selected chip clears it.
- *   Nothing here is required — a half-filled batch is a normal batch.
+ *   Nothing here is required — a half-filled batch is a normal batch. A `multi`
+ *   entry (检测指标) toggles instead, because an assay genuinely reads out on
+ *   several measures at once.
  * - Typing something not in the options offers 存为选项, which pushes it into
  *   the entry's own `options`. The pickers get better the more the notebook is
  *   used, and because options live on the entry that improvement is persisted.
@@ -46,7 +50,9 @@ export default function ParamBench({
     onChange(entries.map((e) => (e.id === id ? { ...e, ...next } : e)));
 
   function promote(entry: ParamEntry) {
-    const v = entry.value.trim();
+    const v = entry.multi
+      ? (splitMulti(entry.value).find((x) => !entry.options.includes(x)) ?? "")
+      : entry.value.trim();
     if (!v || entry.options.includes(v)) return;
     patch(entry.id, { options: [...entry.options, v] });
   }
@@ -136,7 +142,40 @@ function ParamRow({
 }) {
   const [editingLabel, setEditingLabel] = useState(false);
   const typed = entry.value.trim();
-  const canPromote = typed !== "" && !entry.options.includes(typed);
+  const picked = entry.multi ? splitMulti(entry.value) : [];
+  // A multi entry's free-text box only ever holds what isn't already a chip, so
+  // 存为选项 stays meaningful: promoting "Cell Titer" out of a value that reads
+  // "Luciferase、Cell Titer" would offer a chip nobody could ever match.
+  const extra = entry.multi
+    ? picked.filter((v) => !entry.options.includes(v))
+    : [];
+  const canPromote = entry.multi
+    ? extra.length === 1
+    : typed !== "" && !entry.options.includes(typed);
+
+  function toggle(opt: string) {
+    if (!entry.multi) {
+      onValue(entry.value === opt ? "" : opt);
+      return;
+    }
+    onValue(
+      joinMulti(
+        picked.includes(opt)
+          ? picked.filter((v) => v !== opt)
+          : [...picked, opt]
+      )
+    );
+  }
+
+  /** For a multi entry the input edits only the values not offered as chips. */
+  function setFreeText(text: string) {
+    if (!entry.multi) {
+      onValue(text);
+      return;
+    }
+    const kept = picked.filter((v) => entry.options.includes(v));
+    onValue(joinMulti([...kept, ...splitMulti(text)]));
+  }
 
   return (
     <div className="grid gap-2 sm:grid-cols-[8rem_1fr] sm:items-start">
@@ -179,17 +218,17 @@ function ParamRow({
         {entry.options.map((opt) => (
           <Chip
             key={opt}
-            active={entry.value === opt}
-            // Clicking the selected chip clears it — nothing here is required.
-            onClick={() => onValue(entry.value === opt ? "" : opt)}
+            active={entry.multi ? picked.includes(opt) : entry.value === opt}
+            // Clicking a selected chip clears it — nothing here is required.
+            onClick={() => toggle(opt)}
           >
             {opt}
           </Chip>
         ))}
 
         <Input
-          value={entry.value}
-          onChange={(e) => onValue(e.target.value)}
+          value={entry.multi ? joinMulti(extra) : entry.value}
+          onChange={(e) => setFreeText(e.target.value)}
           placeholder={entry.placeholder ?? "手动输入"}
           className="h-8 w-40 text-xs"
         />

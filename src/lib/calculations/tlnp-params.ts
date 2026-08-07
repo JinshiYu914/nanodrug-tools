@@ -21,12 +21,15 @@ export interface ParamEntry {
   /** A preset id ("cationicLipid") or a genId() for a user-added field. */
   id: string;
   label: string;
-  /** What was recorded. Free text — may or may not be one of `options`. */
+  /** What was recorded. Free text — may or may not be one of `options`.
+   *  When `multi`, several answers joined by MULTI_SEP. */
   value: string;
   /** Chips offered: preset options ∪ values the user promoted. */
   options: string[];
   /** true = user-created. Renamable and deletable; presets are neither. */
   custom: boolean;
+  /** Chips toggle instead of replacing — 检测指标 is genuinely several answers. */
+  multi: boolean;
   placeholder?: string;
 }
 
@@ -34,7 +37,28 @@ export interface ParamPreset {
   id: string;
   label: string;
   options: string[];
+  multi?: boolean;
   placeholder?: string;
+}
+
+/**
+ * Separator for a multi-valued entry.
+ *
+ * A single string rather than an array because every reader — describeParams,
+ * the compare table, both exporters — already treats `value` as the thing to
+ * print, and none of the preset options contain it.
+ */
+export const MULTI_SEP = "、";
+
+export function splitMulti(value: string): string[] {
+  return value
+    .split(MULTI_SEP)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+export function joinMulti(values: string[]): string {
+  return values.filter(Boolean).join(MULTI_SEP);
 }
 
 // ─── Preset banks ─────────────────────────────────────────
@@ -75,12 +99,24 @@ export const PREP_PARAM_PRESETS: ParamPreset[] = [
   },
 ];
 
+/**
+ * The whole 体外实验设计 card — there is no second set of typed fields beside
+ * it. Module 4 previously had both, which meant 细胞系 was asked twice and the
+ * two answers could disagree; the pickable version won because it is the one
+ * that can grow a new cell line without a deploy.
+ */
 export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
   {
     id: "cellLine",
     label: "细胞系",
-    options: ["HeLa", "HEK293T", "A549", "RAW264.7", "DC2.4", "原代 T 细胞"],
+    options: ["人 T cell", "小鼠 T cell", "Hep3B", "HEK293T", "RAW264.7", "DC2.4"],
     placeholder: "其他细胞系",
+  },
+  {
+    id: "passage",
+    label: "代数",
+    options: [],
+    placeholder: "例如 A1P1",
   },
   {
     id: "plate",
@@ -91,8 +127,21 @@ export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
   {
     id: "readout",
     label: "检测指标",
-    options: ["Luciferase", "eGFP 流式", "qPCR", "CCK-8", "共聚焦"],
+    options: ["Luciferase", "荧光蛋白流式", "Cell Titer", "CCK-8", "共聚焦"],
+    multi: true,
     placeholder: "其他指标",
+  },
+  {
+    id: "dose",
+    label: "剂量",
+    options: ["20 ng", "50 ng", "100 ng", "200 ng", "500 ng"],
+    placeholder: "其他剂量",
+  },
+  {
+    id: "timepoint",
+    label: "检测时间",
+    options: ["12 h", "16 h", "24 h", "48 h"],
+    placeholder: "其他时间",
   },
 ];
 
@@ -100,8 +149,32 @@ export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
   {
     id: "species",
     label: "动物",
-    options: ["BALB/c 小鼠", "C57BL/6 小鼠", "NSG 小鼠", "SD 大鼠"],
+    options: ["小鼠", "大鼠", "兔"],
+    placeholder: "其他动物",
+  },
+  {
+    id: "strain",
+    label: "品系",
+    options: ["BALB/c", "C57BL/6", "NSG", "SD", "ICR", "裸鼠"],
     placeholder: "其他品系",
+  },
+  {
+    id: "age",
+    label: "周龄",
+    options: ["4 周", "6 周", "8 周", "10 周"],
+    placeholder: "其他周龄",
+  },
+  {
+    id: "sex",
+    label: "性别",
+    options: ["雌", "雄"],
+    placeholder: "其他",
+  },
+  {
+    id: "replicates",
+    label: "生物学重复",
+    options: ["1", "2", "3"],
+    placeholder: "其他数量",
   },
   {
     id: "route",
@@ -110,9 +183,22 @@ export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
     placeholder: "其他途径",
   },
   {
+    id: "dose",
+    label: "剂量",
+    options: ["1 µg", "2.5 µg", "5 µg", "10 µg"],
+    placeholder: "其他剂量",
+  },
+  {
+    id: "timepoint",
+    label: "检测时间点",
+    options: ["4 h", "5 h", "6 h", "8 h", "12 h", "24 h"],
+    placeholder: "其他时间",
+  },
+  {
     id: "invivoReadout",
     label: "检测指标",
-    options: ["IVIS 活体成像", "器官分布", "血清 ELISA", "组织 qPCR", "体重/存活"],
+    options: ["活体成像", "离体成像", "器官荧光分布", "血清 ELISA", "组织 qPCR"],
+    multi: true,
     placeholder: "其他指标",
   },
 ];
@@ -126,19 +212,49 @@ export function createParamEntries(presets: ParamPreset[]): ParamEntry[] {
     value: "",
     options: [...p.options],
     custom: false,
+    multi: p.multi === true,
     ...(p.placeholder ? { placeholder: p.placeholder } : {}),
   }));
 }
 
-export function createCustomParam(label: string): ParamEntry {
+export function createCustomParam(label: string, value = ""): ParamEntry {
   return {
     id: genId(),
     label: label.trim() || "自定义参数",
-    value: "",
+    value,
     options: [],
     custom: true,
+    multi: false,
     placeholder: "输入取值",
   };
+}
+
+/**
+ * Write a value into an entry by preset id, creating nothing and overwriting
+ * nothing that already has an answer.
+ *
+ * Used by the v2 → v3 migration, where module 4's typed fields (cellLine,
+ * plate, dose, …) fold into the parameter bench that replaced them.
+ */
+export function seedParamValue(
+  entries: ParamEntry[],
+  id: string,
+  value: string
+): ParamEntry[] {
+  const v = value.trim();
+  if (!v) return entries;
+  let seeded = false;
+  const out = entries.map((e) => {
+    if (e.id !== id || e.value.trim() !== "") return e;
+    seeded = true;
+    return {
+      ...e,
+      value: v,
+      // Keep it pickable next time, exactly as 存为选项 would have.
+      options: e.options.includes(v) ? e.options : [...e.options, v],
+    };
+  });
+  return seeded ? out : entries;
 }
 
 function uniqueStrings(values: unknown): string[] {
@@ -180,7 +296,8 @@ export function mergeParamEntries(
     return {
       ...entry,
       // A renamed preset in code wins over the stored label — the stored one is
-      // a snapshot of an older wording, not a user decision.
+      // a snapshot of an older wording, not a user decision. `multi` likewise:
+      // it is structural, decided by the preset bank, not by the saved blob.
       value: typeof hit.value === "string" ? hit.value : "",
       options: uniqueStrings([...entry.options, ...uniqueStrings(hit.options)]),
     };
@@ -195,6 +312,7 @@ export function mergeParamEntries(
       value: typeof s.value === "string" ? s.value : "",
       options: uniqueStrings(s.options),
       custom: true,
+      multi: s.multi === true,
       placeholder: typeof s.placeholder === "string" ? s.placeholder : "输入取值",
     });
   }

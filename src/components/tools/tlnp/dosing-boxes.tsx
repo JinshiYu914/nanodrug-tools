@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   computeConjugationDose,
+  explainConjugationDose,
   findProtein,
   linkerNmolPerUgRna,
   proteinName,
@@ -14,6 +15,7 @@ import type {
   ProteinEntry,
   ReactionSystem,
 } from "@/lib/calculations/tlnp-experiment";
+import OptionSelect from "./option-select";
 
 const BUFFERS = ["PBS pH 7.4", "PBS pH 6.8 with EDTA", "HEPES pH 7.4", "TBS"];
 
@@ -32,8 +34,13 @@ const v = (n: number | null, digits = 1): string =>
  * Everything above the divider is read off the matrix; the two fields below it
  * (总体积, 反应 buffer) live here because they are what turns a ratio into a
  * pipetting instruction. Buffer is a solved quantity, not a guess: it is
- * whatever is left after the LNP and the protein, which is only knowable once
+ * whatever is left after the LNP and the antibody, which is only knowable once
  * a total volume is pinned.
+ *
+ * Each box carries its own 计算过程 — the antibody volume comes off four
+ * chained conversions (RNA → N/P → lipid → linker → antibody), none of which
+ * can be checked by eye, and a pipetting number nobody can check is one nobody
+ * should trust.
  */
 export default function DosingBoxes({ systems, proteins, onChange }: Props) {
   if (systems.length === 0) {
@@ -50,6 +57,7 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
         const protein = findProtein(proteins, s.proteinId);
         const dose = computeConjugationDose(s, protein);
         const perUg = linkerNmolPerUgRna(s.basis, s.linkerPercent);
+        const steps = explainConjugationDose(s, protein);
 
         return (
           <div key={s.id} className="space-y-2 rounded-lg border p-3">
@@ -58,14 +66,14 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
                 {systemName(s, i)}
               </p>
               <p className="shrink-0 truncate text-[11px] text-muted-foreground">
-                {proteinName(protein) || "未选蛋白"}
+                {proteinName(protein) || "未选抗体"}
               </p>
             </div>
 
             <dl className="space-y-1">
               <DoseLine label="LNP" value={`${v(dose.lnpVolume_uL)} µL`} strong />
               <DoseLine
-                label="蛋白"
+                label="抗体"
                 value={`${v(dose.proteinVolume_uL)} µL`}
                 strong
               />
@@ -86,7 +94,7 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
 
             <div className="space-y-1 border-t pt-2">
               <DoseLine
-                label="RNA 投入"
+                label="投料 RNA"
                 value={`${v(dose.rnaMass_ug, 2)} µg`}
                 muted
               />
@@ -96,7 +104,7 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
                 muted
               />
               <DoseLine
-                label="蛋白"
+                label="抗体"
                 value={`${v(dose.protein_nmol, 3)} nmol`}
                 muted
               />
@@ -121,16 +129,34 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
                 <Label className="text-[11px] text-muted-foreground">
                   反应 buffer
                 </Label>
-                <Input
+                <OptionSelect
                   value={s.reactionBuffer}
-                  list="tlnp-reaction-buffers"
-                  onChange={(e) =>
-                    onChange(s.id, { reactionBuffer: e.target.value })
-                  }
-                  className="h-7 px-2 text-xs"
+                  options={BUFFERS}
+                  onChange={(reactionBuffer) => onChange(s.id, { reactionBuffer })}
+                  placeholder="自定义 buffer"
                 />
               </div>
             </div>
+
+            {steps.length > 0 && (
+              <details className="border-t pt-2 text-[11px]" open>
+                <summary className="cursor-pointer select-none text-muted-foreground">
+                  计算过程
+                </summary>
+                <ol className="mt-1.5 space-y-1">
+                  {steps.map((step, at) => (
+                    <li key={step.label} className="leading-snug">
+                      <span className="text-muted-foreground">
+                        {at + 1}. {step.label} ={" "}
+                      </span>
+                      <span className="font-mono">{step.expr}</span>
+                      <span className="text-muted-foreground"> = </span>
+                      <span className="font-mono font-medium">{step.result}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
 
             {/* The conversion inputs, shown small because they are usually
                 inherited from the formulation and rarely touched — but they
@@ -182,12 +208,6 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
           </div>
         );
       })}
-
-      <datalist id="tlnp-reaction-buffers">
-        {BUFFERS.map((b) => (
-          <option key={b} value={b} />
-        ))}
-      </datalist>
     </div>
   );
 }

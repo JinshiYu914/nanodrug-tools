@@ -12,6 +12,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import ChromatogramChart from "./chromatogram-chart";
+import {
+  GroupedBarChart,
+  LiverSpleenChart,
+  SampleBarChart,
+} from "./assay-charts";
 import { describeMethod } from "@/lib/calculations/lnp-bench";
 import {
   computeConjugationDose,
@@ -20,13 +25,18 @@ import {
   systemName,
 } from "@/lib/calculations/tlnp-conjugation";
 import {
+  INVITRO_READOUT_LABELS,
+  invitroUnitLabel,
   PURIFICATION_METHOD_LABELS,
   resolveEe,
   serializeTlnpExperiment,
   summarizeBatch,
+  summarizeInVitro,
   TEM_LABELS,
+  type AssayDesign,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
+import { groupRoi, liverSpleenRatio } from "@/lib/calculations/tlnp-roi";
 import { exportTlnpToXlsx } from "@/lib/export/tlnp-report-xlsx";
 
 const n = (v: number | null, digits = 1): string =>
@@ -152,7 +162,7 @@ export default function BatchReport({
 
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Stat label="样品" value={String(summary.sampleCount)} />
-            <Stat label="蛋白" value={String(summary.proteinCount)} />
+            <Stat label="抗体" value={String(summary.proteinCount)} />
             <Stat label="反应体系" value={String(summary.systemCount)} />
             <Stat label="平均粒径" value={`${n(summary.meanSize_nm)} nm`} />
             <Stat label="平均包封率" value={`${n(summary.meanEe_percent)} %`} />
@@ -251,25 +261,29 @@ export default function BatchReport({
           <CardHeader>
             <CardTitle className="text-base">偶联反应</CardTitle>
             <CardDescription>
-              {systems.length} 个反应体系 · {data.conjugation.proteins.length} 个蛋白
+              {systems.length} 个反应体系 · {data.conjugation.proteins.length} 个抗体
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[48rem] border-collapse text-xs">
+              <table className="w-full min-w-[62rem] border-collapse text-xs">
                 <thead>
                   <tr className="border-b bg-muted/40">
                     <th className="px-2 py-2 text-left font-medium">反应体系</th>
-                    <th className="px-2 py-2 text-left font-medium">蛋白</th>
+                    <th className="px-2 py-2 text-left font-medium">抗体</th>
                     <th className="px-2 py-2 text-left font-medium">
-                      linker:蛋白
+                      linker:抗体
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium">
+                      投料 RNA µg
                     </th>
                     <th className="px-2 py-2 text-left font-medium">LNP µL</th>
-                    <th className="px-2 py-2 text-left font-medium">蛋白 µL</th>
+                    <th className="px-2 py-2 text-left font-medium">抗体 µL</th>
                     <th className="px-2 py-2 text-left font-medium">
                       buffer µL
                     </th>
                     <th className="px-2 py-2 text-left font-medium">总 µL</th>
+                    <th className="px-2 py-2 text-left font-medium">反应条件</th>
                     <th className="px-2 py-2 text-left font-medium">外观</th>
                   </tr>
                 </thead>
@@ -284,6 +298,9 @@ export default function BatchReport({
                         {row.system.molarRatio ? `1:${row.system.molarRatio}` : "--"}
                       </td>
                       <td className="px-2 py-1.5 font-mono">
+                        {n(row.dose.rnaMass_ug, 2)}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">
                         {n(row.dose.lnpVolume_uL)}
                       </td>
                       <td className="px-2 py-1.5 font-mono">
@@ -296,6 +313,15 @@ export default function BatchReport({
                         {n(row.dose.totalVolume_uL)}
                       </td>
                       <td className="px-2 py-1.5 text-muted-foreground">
+                        {[
+                          row.system.temperature,
+                          row.system.duration,
+                          row.system.shaking,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "--"}
+                      </td>
+                      <td className="px-2 py-1.5 text-muted-foreground">
                         {row.observation?.turbidity === "turbid"
                           ? "浑浊"
                           : row.observation?.turbidity === "slight"
@@ -306,6 +332,63 @@ export default function BatchReport({
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {data.purification.results.systems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">纯化后表征</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[40rem] border-collapse text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="px-2 py-2 text-left font-medium">反应体系</th>
+                    <th className="px-2 py-2 text-left font-medium">
+                      浓度 (ng/µL)
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium">包封率 %</th>
+                    <th className="px-2 py-2 text-left font-medium">得率 %</th>
+                    <th className="px-2 py-2 text-left font-medium">粒径 nm</th>
+                    <th className="px-2 py-2 text-left font-medium">PDI</th>
+                    <th className="px-2 py-2 text-left font-medium">Zeta mV</th>
+                    <th className="px-2 py-2 text-left font-medium">TEM</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.conjugation.systems.map((sys, i) => {
+                    const r = data.purification.results.systems.find(
+                      (x) => x.systemId === sys.id
+                    );
+                    if (!r) return null;
+                    const ee = resolveEe(r.ee);
+                    return (
+                      <tr key={sys.id} className="border-b last:border-b-0">
+                        <td className="px-2 py-1.5">{systemName(sys, i)}</td>
+                        <td className="px-2 py-1.5 font-mono">{n(ee.conc, 2)}</td>
+                        <td className="px-2 py-1.5 font-mono">{n(ee.ee)}</td>
+                        <td className="px-2 py-1.5 font-mono">{n(ee.yield_)}</td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {r.dls.size_nm || "--"}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {r.dls.pdi || "--"}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {r.dls.zeta_mV || "--"}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {r.tem === "" ? "--" : TEM_LABELS[r.tem]}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -329,6 +412,8 @@ export default function BatchReport({
         </Card>
       )}
 
+      <AssaySection data={data} />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">讨论记录</CardTitle>
@@ -342,6 +427,110 @@ export default function BatchReport({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Module 4, read-only: each arm's parameter bench plus its own chart.
+ *
+ * The charts are the same components module 4 edits with, not a second
+ * rendering — a report that redrew the data its own way would be a report that
+ * could disagree with the page it summarises.
+ */
+function AssaySection({ data }: { data: TlnpExperimentData }) {
+  const vitro = data.assay.invitro;
+  const vivo = data.assay.invivo;
+  const stats = useMemo(
+    () => summarizeInVitro(vitro.results),
+    [vitro.results]
+  );
+  const grouped = useMemo(() => groupRoi(vivo.results.rows), [vivo.results.rows]);
+  const ratio = useMemo(
+    () => liverSpleenRatio(vivo.results.rows),
+    [vivo.results.rows]
+  );
+
+  const hasVitro = stats.some((s) => s.mean !== null);
+  const hasVivo = vivo.results.rows.length > 0;
+  const vitroDesign = vitro.design.params.some((p) => p.value.trim() !== "");
+  const vivoDesign = vivo.design.params.some((p) => p.value.trim() !== "");
+  if (!hasVitro && !hasVivo && !vitroDesign && !vivoDesign) return null;
+
+  const unit = invitroUnitLabel(vitro.results);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">体内外实验</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {(vitroDesign || hasVitro) && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">
+              体外
+              {vitro.design.date && (
+                <span className="ml-2 font-mono text-xs text-muted-foreground">
+                  {vitro.design.date}
+                </span>
+              )}
+            </p>
+            <ParamGrid design={vitro.design} />
+            {hasVitro && (
+              <div className="max-w-md">
+                <SampleBarChart
+                  stats={stats}
+                  unit={unit}
+                  title={`${INVITRO_READOUT_LABELS[vitro.results.readout]}（${unit}）`}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {(vivoDesign || hasVivo) && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">
+              体内
+              {vivo.design.date && (
+                <span className="ml-2 font-mono text-xs text-muted-foreground">
+                  {vivo.design.date}
+                </span>
+              )}
+            </p>
+            <ParamGrid design={vivo.design} />
+            {hasVivo && (
+              <div className="grid gap-3 lg:grid-cols-3">
+                <GroupedBarChart
+                  samples={grouped.samples}
+                  series={grouped.total}
+                  unit="Total Flux (p/s)"
+                  title="Total ROI"
+                />
+                <GroupedBarChart
+                  samples={grouped.samples}
+                  series={grouped.avg}
+                  unit="Avg Radiance (p/s/cm²/sr)"
+                  title="Avg ROI"
+                />
+                <LiverSpleenChart bars={ratio} />
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ParamGrid({ design }: { design: AssayDesign }) {
+  const filled = design.params.filter((p) => p.value.trim() !== "");
+  if (filled.length === 0) return null;
+  return (
+    <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {filled.map((p) => (
+        <Meta key={p.id} label={p.label} value={p.value} />
+      ))}
+    </dl>
   );
 }
 

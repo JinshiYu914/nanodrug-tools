@@ -59,7 +59,7 @@ export async function saveProtein(
     type: "protein",
     is_folder: false,
     parent_id: null,
-    name: p.name.trim() || "未命名蛋白",
+    name: p.name.trim() || "未命名抗体",
     data: { mw: p.mw, conc: p.conc, concUnit: p.concUnit, note: p.note },
     sort_order: 0,
   });
@@ -67,7 +67,7 @@ export async function saveProtein(
 }
 
 export async function updateProtein(p: ProteinLibraryItem): Promise<void> {
-  await renameItem(p.id, p.name.trim() || "未命名蛋白");
+  await renameItem(p.id, p.name.trim() || "未命名抗体");
   await updateItemData(p.id, {
     mw: p.mw,
     conc: p.conc,

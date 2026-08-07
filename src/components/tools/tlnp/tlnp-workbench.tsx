@@ -92,7 +92,8 @@ export default function TlnpWorkbench() {
         const hit = rows.find((r) => r.id === batchParam && !r.is_folder);
         if (hit) select(hit);
       } catch (e) {
-        console.error(e);
+        console.warn("[tlnp] 载入批次失败", e);
+        if (!cancelled) toast.error("载入批次失败，请刷新重试");
       } finally {
         if (!cancelled) setRestoring(false);
       }
@@ -100,6 +101,13 @@ export default function TlnpWorkbench() {
 
     return () => {
       cancelled = true;
+      // Clearing the marker is what makes this retryable. A cleanup before the
+      // fetch resolves — StrictMode's double-mount in dev, or the user
+      // navigating in fast — leaves `restoring` stuck true, and the re-run would
+      // otherwise bail on the marker and sit on 「正在载入批次…」 forever. That
+      // is exactly what the RiboGreen round trip hit, because it lands here
+      // with ?batch= already in the URL.
+      if (restoreAttempted.current === batchParam) restoreAttempted.current = null;
     };
   }, [authed, batchParam, batch?.id, select]);
 
@@ -177,7 +185,7 @@ export default function TlnpWorkbench() {
           toast.error("这条记录里没有本批次的样品");
         }
       } catch (e) {
-        console.error(e);
+        console.warn("[tlnp] 导入 RiboGreen 结果失败", e);
         toast.error("导入检测结果失败");
       } finally {
         // Drop the param either way, so a refresh doesn't re-import and the
@@ -188,6 +196,10 @@ export default function TlnpWorkbench() {
 
     return () => {
       cancelled = true;
+      // Same retry rule as the restore effect above — an import abandoned
+      // mid-flight must not consume its own one-shot marker, or the results
+      // never land and ?import= never gets cleaned off the URL.
+      if (importAttempted.current === importParam) importAttempted.current = null;
     };
   }, [
     authed,

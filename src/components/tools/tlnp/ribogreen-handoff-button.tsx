@@ -14,11 +14,15 @@ interface Props {
 }
 
 /**
- * 「输入样品数值计算」 — the trip out to the real RiboGreen calculator.
+ * The trip out to the real RiboGreen calculator.
  *
  * A plain link, because the destination reads everything it needs off the URL.
  * Next to it, a refresh for the case where the record was saved in another tab
  * and this page hasn't looked for it since.
+ *
+ * Rendered as the primary action of its card: it is the step that fills the
+ * whole characterization matrix, and as an outline button it read like one
+ * option among several rather than the thing to do next.
  */
 export default function RibogreenHandoffButton({
   batchId,
@@ -43,15 +47,15 @@ export default function RibogreenHandoffButton({
         )}
       </button>
       {disabled ? (
-        <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled>
+        <Button size="sm" className="h-8 gap-1.5 text-xs" disabled>
           <Calculator className="h-3.5 w-3.5" />
-          输入样品数值计算
+          输入酶标仪检测结果开始计算
         </Button>
       ) : (
         <Link href={handoffUrl(batchId, stage)}>
-          <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs">
+          <Button size="sm" className="h-8 gap-1.5 text-xs">
             <Calculator className="h-3.5 w-3.5" />
-            输入样品数值计算
+            输入酶标仪检测结果开始计算
           </Button>
         </Link>
       )}

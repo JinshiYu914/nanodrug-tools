@@ -9,17 +9,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Chip from "./chip";
 import ModuleDate from "./module-date";
 import ParamBench from "./param-bench";
-import MetricTable from "./metric-table";
+import InVitroMatrix from "./invitro-matrix";
+import {
+  GroupedBarChart,
+  LiverSpleenChart,
+  SampleBarChart,
+} from "./assay-charts";
 import { systemName } from "@/lib/calculations/tlnp-conjugation";
-import type {
-  TlnpAssayModule,
-  TlnpExperimentData,
+import {
+  groupRoi,
+  liverSpleenRatio,
+  parseRoiTable,
+} from "@/lib/calculations/tlnp-roi";
+import {
+  FLUORESCENCE_METRIC_LABELS,
+  INVITRO_READOUT_LABELS,
+  invitroUnitLabel,
+  summarizeInVitro,
+  type AssayDesign,
+  type FluorescenceMetric,
+  type InVitroReadout,
+  type InVitroResults,
+  type InVivoResults,
+  type TlnpAssayModule,
+  type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 
 interface Props {
@@ -31,7 +49,13 @@ interface Props {
  * Module 4 — 体外 and 体内, switched rather than tabbed so the choice persists
  * with the batch. Both arms are always stored; switching never discards.
  *
- * The subject list offered to both result tables is the batch's reaction
+ * Each arm is a parameter bench for the design (see INVITRO_PARAM_PRESETS) and
+ * a purpose-built result table: a replicate matrix in vitro, an ROI paste in
+ * vivo. Neither result shape is generic, because neither assay is: a luciferase
+ * plate has repeats and an imaging run has organs, and a single 样本/数值 list
+ * could describe neither well enough to plot.
+ *
+ * The subject list offered to the in-vitro matrix is the batch's reaction
  * systems when there are any, falling back to the bare samples — what you dose
  * is the tLNP, not the naked LNP, once module 2 has run.
  */
@@ -40,6 +64,12 @@ export default function ModuleAssay({ data, update }: Props) {
 
   const setAssay = (patch: (a: TlnpAssayModule) => TlnpAssayModule) =>
     update((prev) => ({ ...prev, assay: patch(prev.assay) }));
+
+  const setVitro = (patch: Partial<TlnpAssayModule["invitro"]>) =>
+    setAssay((a) => ({ ...a, invitro: { ...a.invitro, ...patch } }));
+
+  const setVivo = (patch: Partial<TlnpAssayModule["invivo"]>) =>
+    setAssay((a) => ({ ...a, invivo: { ...a.invivo, ...patch } }));
 
   const subjects = useMemo(() => {
     const systems = data.conjugation.systems.map(systemName);
@@ -51,397 +81,51 @@ export default function ModuleAssay({ data, update }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        <Chip
+      {/* A segmented pair rather than two loose chips: this is the one control
+          that decides what the whole module is about, so it reads as a switch
+          with a visibly selected side. */}
+      <div className="inline-flex rounded-lg border p-1">
+        <ArmButton
           active={isVitro}
           onClick={() => setAssay((a) => ({ ...a, active: "invitro" }))}
-        >
-          体外实验
-        </Chip>
-        <Chip
+          icon={<Microscope className="h-4 w-4" />}
+          label="体外实验"
+        />
+        <ArmButton
           active={!isVitro}
           onClick={() => setAssay((a) => ({ ...a, active: "invivo" }))}
-        >
-          体内实验
-        </Chip>
+          icon={<Mouse className="h-4 w-4" />}
+          label="体内实验"
+        />
       </div>
 
       {isVitro ? (
         <>
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Microscope className="h-4 w-4 text-pillar-disease" />
-                  <CardTitle className="text-base">体外实验设计</CardTitle>
-                </div>
-                <ModuleDate
-                  value={assay.invitro.design.date}
-                  onChange={(date) =>
-                    setAssay((a) => ({
-                      ...a,
-                      invitro: {
-                        ...a.invitro,
-                        design: { ...a.invitro.design, date },
-                      },
-                    }))
-                  }
-                />
-              </div>
-              <CardDescription>
-                细胞系、孔板、转染时的细胞密度与剂量。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Field label="细胞系">
-                  <Input
-                    value={assay.invitro.design.cellLine}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: {
-                            ...a.invitro.design,
-                            cellLine: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="例如 原代 T 细胞"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="代数（如 A1P1）">
-                  <Input
-                    value={assay.invitro.design.passage}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: {
-                            ...a.invitro.design,
-                            passage: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="A1P1"
-                    className="h-8 font-mono text-xs"
-                  />
-                </Field>
-                <Field label="孔板">
-                  <Input
-                    value={assay.invitro.design.plate}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: { ...a.invitro.design, plate: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="96 孔板"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="转染时细胞密度">
-                  <Input
-                    value={assay.invitro.design.seedingDensity}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: {
-                            ...a.invitro.design,
-                            seedingDensity: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="例如 1×10⁵ /well"
-                    className="h-8 font-mono text-xs"
-                  />
-                </Field>
-                <Field label="剂量">
-                  <Input
-                    value={assay.invitro.design.dose}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: { ...a.invitro.design, dose: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="例如 100 ng RNA/well"
-                    className="h-8 font-mono text-xs"
-                  />
-                </Field>
-                <Field label="检测时间点">
-                  <Input
-                    value={assay.invitro.design.timepoints}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invitro: {
-                          ...a.invitro,
-                          design: {
-                            ...a.invitro.design,
-                            timepoints: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="例如 24 h / 48 h"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-              </div>
-
-              <ParamBench
-                entries={assay.invitro.design.params}
-                onChange={(params) =>
-                  setAssay((a) => ({
-                    ...a,
-                    invitro: {
-                      ...a.invitro,
-                      design: { ...a.invitro.design, params },
-                    },
-                  }))
-                }
-                title="其他体外参数"
-              />
-
-              <Field label="设计备注（可选）">
-                <Textarea
-                  value={assay.invitro.design.note}
-                  onChange={(e) =>
-                    setAssay((a) => ({
-                      ...a,
-                      invitro: {
-                        ...a.invitro,
-                        design: { ...a.invitro.design, note: e.target.value },
-                      },
-                    }))
-                  }
-                  className="min-h-16 text-sm"
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
-          <ResultsCard
-            title="体外结果"
-            rows={assay.invitro.results.rows}
-            discussion={assay.invitro.results.discussion}
+          <DesignCard
+            title="体外实验设计"
+            icon={<Microscope className="h-4 w-4 text-pillar-disease" />}
+            description="细胞系、孔板、检测指标、剂量与检测时间。点选或自行输入，也可以新增参数字段。"
+            design={assay.invitro.design}
+            onChange={(design) => setVitro({ design })}
+          />
+          <InVitroResultsCard
+            results={assay.invitro.results}
+            onChange={(results) => setVitro({ results })}
             subjects={subjects}
-            onRows={(rows) =>
-              setAssay((a) => ({
-                ...a,
-                invitro: {
-                  ...a.invitro,
-                  results: { ...a.invitro.results, rows },
-                },
-              }))
-            }
-            onDiscussion={(discussion) =>
-              setAssay((a) => ({
-                ...a,
-                invitro: {
-                  ...a.invitro,
-                  results: { ...a.invitro.results, discussion },
-                },
-              }))
-            }
           />
         </>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Mouse className="h-4 w-4 text-pillar-disease" />
-                  <CardTitle className="text-base">体内实验设计</CardTitle>
-                </div>
-                <ModuleDate
-                  value={assay.invivo.design.date}
-                  onChange={(date) =>
-                    setAssay((a) => ({
-                      ...a,
-                      invivo: {
-                        ...a.invivo,
-                        design: { ...a.invivo.design, date },
-                      },
-                    }))
-                  }
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Field label="动物">
-                  <Input
-                    value={assay.invivo.design.species}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: {
-                            ...a.invivo.design,
-                            species: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="例如 BALB/c 小鼠"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="品系 / 周龄">
-                  <Input
-                    value={assay.invivo.design.strain}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: { ...a.invivo.design, strain: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="例如 雌性 6–8 周"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="给药途径">
-                  <Input
-                    value={assay.invivo.design.route}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: { ...a.invivo.design, route: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="例如 尾静脉"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="剂量">
-                  <Input
-                    value={assay.invivo.design.dose}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: { ...a.invivo.design, dose: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="例如 0.5 mg/kg"
-                    className="h-8 font-mono text-xs"
-                  />
-                </Field>
-                <Field label="分组">
-                  <Input
-                    value={assay.invivo.design.groups}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: { ...a.invivo.design, groups: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder="例如 5 组 × n=3"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-                <Field label="检测时间点">
-                  <Input
-                    value={assay.invivo.design.timepoints}
-                    onChange={(e) =>
-                      setAssay((a) => ({
-                        ...a,
-                        invivo: {
-                          ...a.invivo,
-                          design: {
-                            ...a.invivo.design,
-                            timepoints: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="例如 6 h / 24 h"
-                    className="h-8 text-xs"
-                  />
-                </Field>
-              </div>
-
-              <ParamBench
-                entries={assay.invivo.design.params}
-                onChange={(params) =>
-                  setAssay((a) => ({
-                    ...a,
-                    invivo: {
-                      ...a.invivo,
-                      design: { ...a.invivo.design, params },
-                    },
-                  }))
-                }
-                title="其他体内参数"
-              />
-
-              <Field label="设计备注（可选）">
-                <Textarea
-                  value={assay.invivo.design.note}
-                  onChange={(e) =>
-                    setAssay((a) => ({
-                      ...a,
-                      invivo: {
-                        ...a.invivo,
-                        design: { ...a.invivo.design, note: e.target.value },
-                      },
-                    }))
-                  }
-                  className="min-h-16 text-sm"
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
-          <ResultsCard
-            title="体内结果"
-            rows={assay.invivo.results.rows}
-            discussion={assay.invivo.results.discussion}
-            subjects={subjects}
-            onRows={(rows) =>
-              setAssay((a) => ({
-                ...a,
-                invivo: { ...a.invivo, results: { ...a.invivo.results, rows } },
-              }))
-            }
-            onDiscussion={(discussion) =>
-              setAssay((a) => ({
-                ...a,
-                invivo: {
-                  ...a.invivo,
-                  results: { ...a.invivo.results, discussion },
-                },
-              }))
-            }
+          <DesignCard
+            title="体内实验设计"
+            icon={<Mouse className="h-4 w-4 text-pillar-disease" />}
+            description="动物、给药与检测安排。点选或自行输入，也可以新增参数字段。"
+            design={assay.invivo.design}
+            onChange={(design) => setVivo({ design })}
+          />
+          <InVivoResultsCard
+            results={assay.invivo.results}
+            onChange={(results) => setVivo({ results })}
           />
         </>
       )}
@@ -449,66 +133,280 @@ export default function ModuleAssay({ data, update }: Props) {
   );
 }
 
-function ResultsCard({
+function ArmButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm transition-colors ${
+        active
+          ? "bg-pillar-disease-subtle font-semibold text-foreground ring-1 ring-pillar-disease"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function DesignCard({
   title,
-  rows,
-  discussion,
-  subjects,
-  onRows,
-  onDiscussion,
+  icon,
+  description,
+  design,
+  onChange,
 }: {
   title: string;
-  rows: TlnpAssayModule["invitro"]["results"]["rows"];
-  discussion: string;
-  subjects: string[];
-  onRows: (rows: TlnpAssayModule["invitro"]["results"]["rows"]) => void;
-  onDiscussion: (v: string) => void;
+  icon: React.ReactNode;
+  description: string;
+  design: AssayDesign;
+  onChange: (next: AssayDesign) => void;
 }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {icon}
+            <CardTitle className="text-base">{title}</CardTitle>
+          </div>
+          <ModuleDate
+            value={design.date}
+            onChange={(date) => onChange({ ...design, date })}
+          />
+        </div>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ParamBench
+          entries={design.params}
+          onChange={(params) => onChange({ ...design, params })}
+          title={title}
+        />
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">
+            设计备注（可选）
+          </Label>
+          <Textarea
+            value={design.note}
+            onChange={(e) => onChange({ ...design, note: e.target.value })}
+            className="min-h-16 text-sm"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── 体外结果 ─────────────────────────────────────────────
+
+const READOUTS: InVitroReadout[] = ["luciferase", "fluorescence"];
+const METRICS: FluorescenceMetric[] = ["mfi", "percent"];
+
+function InVitroResultsCard({
+  results,
+  onChange,
+  subjects,
+}: {
+  results: InVitroResults;
+  onChange: (next: InVitroResults) => void;
+  subjects: string[];
+}) {
+  const stats = useMemo(() => summarizeInVitro(results), [results]);
+  const unit = invitroUnitLabel(results);
+
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
+          <CardTitle className="text-base">体外结果</CardTitle>
           <CardDescription>
-            一行一个测量值。「分组」用来区分时间点、剂量组或重复。
+            每一列是一个样本，每一行是一次重复。填完自动出柱状图（均值 ± SD，点为各重复）。
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <MetricTable rows={rows} onChange={onRows} subjects={subjects} />
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {READOUTS.map((r) => (
+              <Chip
+                key={r}
+                active={results.readout === r}
+                onClick={() => onChange({ ...results, readout: r })}
+              >
+                {INVITRO_READOUT_LABELS[r]}
+              </Chip>
+            ))}
+            {results.readout === "fluorescence" && (
+              <>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  定量方式
+                </span>
+                {METRICS.map((m) => (
+                  <Chip
+                    key={m}
+                    active={results.fluorMetric === m}
+                    onClick={() => onChange({ ...results, fluorMetric: m })}
+                  >
+                    {FLUORESCENCE_METRIC_LABELS[m]}
+                  </Chip>
+                ))}
+              </>
+            )}
+          </div>
+
+          <InVitroMatrix
+            results={results}
+            onChange={onChange}
+            subjects={subjects}
+            unit={unit}
+          />
+
+          {stats.some((s) => s.mean !== null) && (
+            <SampleBarChart
+              stats={stats}
+              unit={unit}
+              title={`${INVITRO_READOUT_LABELS[results.readout]}（${unit}）`}
+            />
+          )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <CardTitle className="text-base">结果分析与讨论</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={discussion}
-            onChange={(e) => onDiscussion(e.target.value)}
-            placeholder="例如：靶向组的表达量比对照高约 4 倍，且随剂量递增"
-            className="min-h-32 text-sm"
-          />
-        </CardContent>
-      </Card>
+      <DiscussionCard
+        value={results.discussion}
+        onChange={(discussion) => onChange({ ...results, discussion })}
+        placeholder="例如：靶向组的表达量比对照高约 4 倍，且随剂量递增"
+      />
     </>
   );
 }
 
-function Field({
-  label,
-  children,
+// ─── 体内结果 ─────────────────────────────────────────────
+
+const ROI_EXAMPLE = `tLNP-1\tliver\t2.31e8\t4.52e6
+tLNP-1\tspleen\t8.40e7\t1.63e6
+tLNP-1\tlung\t1.12e7\t3.10e5`;
+
+function InVivoResultsCard({
+  results,
+  onChange,
 }: {
-  label: string;
-  children: React.ReactNode;
+  results: InVivoResults;
+  onChange: (next: InVivoResults) => void;
+}) {
+  const parsed = useMemo(() => parseRoiTable(results.rawText), [results.rawText]);
+  const grouped = useMemo(() => groupRoi(results.rows), [results.rows]);
+  const ratio = useMemo(() => liverSpleenRatio(results.rows), [results.rows]);
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">体内结果</CardTitle>
+          <CardDescription>
+            粘贴四列：样本名 / 器官 / Total ROI / Avg ROI。自动出三张图。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">
+              成像数据（可直接从 Excel 或成像软件复制）
+            </Label>
+            {/* max-h + overflow keeps a 60-row paste inside its own scrollbar.
+                shadcn's Textarea is field-sizing-content, so without a ceiling
+                the box grows to the full paste and takes over the page. */}
+            <Textarea
+              value={results.rawText}
+              onChange={(e) => {
+                const rawText = e.target.value;
+                onChange({
+                  ...results,
+                  rawText,
+                  rows: parseRoiTable(rawText).rows,
+                });
+              }}
+              placeholder={ROI_EXAMPLE}
+              spellCheck={false}
+              className="max-h-64 min-h-32 overflow-y-auto font-mono text-xs"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="text-muted-foreground">
+                已读取 {results.rows.length} 行 · {grouped.samples.length} 个样本 ·{" "}
+                {grouped.organs.length} 个器官
+              </span>
+              {parsed.warnings.map((w) => (
+                <span
+                  key={w}
+                  className="rounded border border-warning/35 bg-warning-subtle px-1.5 py-0.5 text-warning"
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <GroupedBarChart
+              samples={grouped.samples}
+              series={grouped.total}
+              unit="Total Flux (p/s)"
+              title="Total ROI"
+            />
+            <GroupedBarChart
+              samples={grouped.samples}
+              series={grouped.avg}
+              unit="Avg Radiance (p/s/cm²/sr)"
+              title="Avg ROI"
+            />
+            <LiverSpleenChart bars={ratio} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <DiscussionCard
+        value={results.discussion}
+        onChange={(discussion) => onChange({ ...results, discussion })}
+        placeholder="例如：靶向组肝脏占比下降、脾脏占比上升，提示器官再分布"
+      />
+    </>
+  );
+}
+
+function DiscussionCard({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-primary" />
+          <CardTitle className="text-base">结果分析与讨论</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="min-h-32 text-sm"
+        />
+      </CardContent>
+    </Card>
   );
 }

@@ -15,13 +15,18 @@ import {
   systemName,
 } from "@/lib/calculations/tlnp-conjugation";
 import { describeParams } from "@/lib/calculations/tlnp-params";
+import { liverSpleenRatio } from "@/lib/calculations/tlnp-roi";
 import {
+  INVITRO_READOUT_LABELS,
+  invitroUnitLabel,
   resolveEe,
-  TEM_LABELS,
-  type EeResult,
-  type DlsResult,
-  type TemFlag,
   summarizeBatch,
+  summarizeInVitro,
+  TEM_LABELS,
+  type AssayDesign,
+  type DlsResult,
+  type EeResult,
+  type TemFlag,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 
@@ -81,7 +86,7 @@ function overviewRows(
     ["纯化方式", s.purificationLabel],
     [],
     ["样品数", s.sampleCount],
-    ["蛋白数", s.proteinCount],
+    ["抗体数", s.proteinCount],
     ["反应体系数", s.systemCount],
     ["平均粒径 (nm)", n2(s.meanSize_nm)],
     ["平均 PDI", n2(s.meanPdi)],
@@ -171,7 +176,7 @@ function purifiedCharacterization(d: TlnpExperimentData): Cell[][] {
 }
 
 function proteinRows(d: TlnpExperimentData): Cell[][] {
-  const head: Cell[] = ["蛋白", "分子量 (Da)", "浓度", "单位", "备注"];
+  const head: Cell[] = ["抗体", "分子量 (Da)", "浓度", "单位", "备注"];
   const body = d.conjugation.proteins.map((p, i) => [
     proteinName(p, i),
     p.mw,
@@ -188,15 +193,15 @@ function systemRows(d: TlnpExperimentData): Cell[][] {
     "反应体系",
     "LNP 来源",
     "LNP 浓度 (ng/µL)",
-    "LNP 体积 (µL)",
+    "投料 LNP-RNA (µg)",
     "linker (mol %)",
     "linker (nmol/µg RNA)",
-    "蛋白",
-    "linker:蛋白",
-    "RNA 投入 (µg)",
+    "抗体",
+    "linker:抗体",
+    "LNP 取用 (µL)",
     "linker (nmol)",
-    "蛋白 (nmol)",
-    "蛋白取用 (µL)",
+    "抗体 (nmol)",
+    "抗体取用 (µL)",
     "反应 buffer (µL)",
     "总体积 (µL)",
     "反应 buffer",
@@ -231,12 +236,12 @@ function systemRows(d: TlnpExperimentData): Cell[][] {
       systemName(s, i),
       sample?.name ?? s.lnpName,
       s.lnpConc,
-      s.lnpVolume,
+      s.rnaMass,
       s.linkerPercent,
       n2(linkerNmolPerUgRna(s.basis, s.linkerPercent)),
       proteinName(protein),
       s.molarRatio ? `1:${s.molarRatio}` : "",
-      n2(dose.rnaMass_ug),
+      n2(dose.lnpVolume_uL),
       n2(dose.linker_nmol),
       n2(dose.protein_nmol),
       n2(dose.proteinVolume_uL),
@@ -283,9 +288,6 @@ function purificationRows(d: TlnpExperimentData): Cell[][] {
       ["buffer", g.dialysis.buffer]
     );
   }
-  rows.push([], ["TEM 图片", d.purification.results.tem.imageUrl]);
-  rows.push(["TEM 放大倍数", d.purification.results.tem.magnification]);
-  rows.push(["TEM 形貌", d.purification.results.tem.note]);
   return rows;
 }
 
@@ -302,14 +304,72 @@ function chromatogramRows(d: TlnpExperimentData): Cell[][] {
   return out.length > 0 ? out : [["（没有导入层析数据）"]];
 }
 
-function assayRows(d: TlnpExperimentData): Cell[][] {
-  const head: Cell[] = ["实验类型", "样本", "分组", "数值", "单位", "备注"];
-  const rows: Cell[][] = [head];
-  for (const r of d.assay.invitro.results.rows) {
-    rows.push(["体外", r.label, r.group, r.value, r.unit, r.note]);
+/** 设计参数 for one arm, one row per pickable field. */
+function assayDesignRows(label: string, design: AssayDesign): Cell[][] {
+  const rows: Cell[][] = [[`${label}实验设计`, ""], ["日期", design.date]];
+  for (const e of design.params) rows.push([e.label, e.value]);
+  if (design.note.trim()) rows.push(["设计备注", design.note]);
+  return rows;
+}
+
+/**
+ * 体外: the replicate matrix as pasted, plus the mean ± SD under it.
+ *
+ * Both, because the matrix is the raw record and the summary is what gets
+ * quoted — recomputing a mean from a spreadsheet is where transcription errors
+ * come from.
+ */
+function invitroRows(d: TlnpExperimentData): Cell[][] {
+  const r = d.assay.invitro.results;
+  const rows: Cell[][] = assayDesignRows("体外", d.assay.invitro.design);
+  rows.push([]);
+  if (r.columns.length === 0) return [...rows, ["（还没有体外结果）"]];
+
+  const unit = invitroUnitLabel(r);
+  const names = r.columns.map((c, i) => c.name || `样本 ${i + 1}`);
+  rows.push([`检测指标：${INVITRO_READOUT_LABELS[r.readout]}`, `单位：${unit}`]);
+  rows.push(["重复", ...names]);
+  r.replicates.forEach((rep, i) => {
+    rows.push([`#${i + 1}`, ...r.columns.map((_, k) => rep.values[k] ?? "")]);
+  });
+
+  const stats = summarizeInVitro(r);
+  rows.push([]);
+  rows.push(["均值", ...stats.map((s) => n2(s.mean))]);
+  rows.push(["SD", ...stats.map((s) => n2(s.sd))]);
+  rows.push(["n", ...stats.map((s) => s.values.length)]);
+  return rows;
+}
+
+/** 体内: the ROI rows plus the liver/spleen share the third chart draws. */
+function invivoRows(d: TlnpExperimentData): Cell[][] {
+  const r = d.assay.invivo.results;
+  const rows: Cell[][] = assayDesignRows("体内", d.assay.invivo.design);
+  rows.push([]);
+  if (r.rows.length === 0) return [...rows, ["（还没有体内结果）"]];
+
+  rows.push([
+    "样本",
+    "器官",
+    "Total ROI — Total Flux (p/s)",
+    "Avg ROI — Avg Radiance (p/s/cm²/sr)",
+  ]);
+  for (const row of r.rows) {
+    rows.push([row.sample, row.organ, row.totalRoi, row.avgRoi]);
   }
-  for (const r of d.assay.invivo.results.rows) {
-    rows.push(["体内", r.label, r.group, r.value, r.unit, r.note]);
+
+  const ratio = liverSpleenRatio(r.rows);
+  if (ratio.length > 0) {
+    rows.push([]);
+    rows.push(["样本", "肝占比", "脾占比", "肝/脾 (Avg ROI)"]);
+    for (const b of ratio) {
+      rows.push([
+        b.sample,
+        n2(b.liver),
+        n2(b.spleen),
+        isFinite(b.ratio) ? n2(b.ratio) : "",
+      ]);
+    }
   }
   return rows;
 }
@@ -352,7 +412,7 @@ export function exportTlnpToXlsx(
   }
 
   XLSX.utils.book_append_sheet(wb, sheet(prepCharacterization(d)), "表征结果");
-  XLSX.utils.book_append_sheet(wb, sheet(proteinRows(d)), "蛋白");
+  XLSX.utils.book_append_sheet(wb, sheet(proteinRows(d)), "抗体");
   XLSX.utils.book_append_sheet(wb, sheet(systemRows(d)), "反应体系");
   XLSX.utils.book_append_sheet(wb, sheet(purificationRows(d)), "纯化方法");
   XLSX.utils.book_append_sheet(
@@ -361,7 +421,8 @@ export function exportTlnpToXlsx(
     "纯化后表征"
   );
   XLSX.utils.book_append_sheet(wb, sheet(chromatogramRows(d)), "层析原始数据");
-  XLSX.utils.book_append_sheet(wb, sheet(assayRows(d)), "体内外结果");
+  XLSX.utils.book_append_sheet(wb, sheet(invitroRows(d)), "体外结果");
+  XLSX.utils.book_append_sheet(wb, sheet(invivoRows(d)), "体内结果");
   XLSX.utils.book_append_sheet(wb, sheet(discussionRows(d)), "讨论记录");
 
   XLSX.writeFile(
@@ -390,7 +451,7 @@ export function buildCompareSheet(entries: CompareEntry[]): XLSX.WorkSheet {
     "溶剂置换",
     "纯化方式",
     "样品数",
-    "蛋白数",
+    "抗体数",
     "反应体系数",
     "平均粒径 (nm)",
     "平均 PDI",

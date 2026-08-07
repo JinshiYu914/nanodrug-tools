@@ -70,7 +70,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
   }
 
   function remove(p: ProteinEntry) {
-    if (!confirm(`从本批次移除蛋白「${p.name || "未命名"}」？`)) return;
+    if (!confirm(`从本批次移除抗体「${p.name || "未命名"}」？`)) return;
     onChange(proteins.filter((x) => x.id !== p.id));
   }
 
@@ -93,7 +93,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
 
   async function saveToLibrary(p: ProteinEntry) {
     if (!p.name.trim()) {
-      toast.error("请先填写蛋白名称");
+      toast.error("请先填写抗体名称");
       return;
     }
     try {
@@ -105,7 +105,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
         note: p.note,
       });
       patch(p.id, { libraryId: saved.id });
-      toast.success(`已保存到蛋白库：${saved.name}`);
+      toast.success(`已保存到抗体库：${saved.name}`);
     } catch (e) {
       console.error(e);
       toast.error(describeError(e, MIGRATION));
@@ -113,7 +113,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
   }
 
   async function removeFromLibrary(item: ProteinLibraryItem) {
-    if (!confirm(`从蛋白库删除「${item.name}」？已经用过它的批次不受影响。`))
+    if (!confirm(`从抗体库删除「${item.name}」？已经用过它的批次不受影响。`))
       return;
     try {
       await deleteProtein(item.id);
@@ -130,12 +130,12 @@ export default function ProteinBench({ proteins, onChange }: Props) {
       {proteins.length === 0 ? (
         <div className="space-y-3 rounded-lg border border-dashed py-8 text-center">
           <p className="text-sm text-muted-foreground">
-            还没有蛋白。先填一个，下面的反应体系才能算出加样体积。
+            还没有抗体。先填一个，下面的反应体系才能算出加样体积。
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button size="sm" className="gap-1.5" onClick={add}>
               <Plus className="h-3.5 w-3.5" />
-              添加蛋白
+              添加抗体
             </Button>
             <Button
               size="sm"
@@ -144,7 +144,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               onClick={() => setLibraryOpen(true)}
             >
               <Library className="h-3.5 w-3.5" />
-              从蛋白库选择
+              从抗体库选择
             </Button>
           </div>
         </div>
@@ -161,12 +161,12 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1 space-y-1">
                       <Label className="text-[11px] text-muted-foreground">
-                        蛋白名称
+                        抗体名称
                       </Label>
                       <Input
                         value={p.name}
                         onChange={(e) => patch(p.id, { name: e.target.value })}
-                        placeholder={`蛋白 ${i + 1}，例如 anti-CD3 scFv`}
+                        placeholder={`抗体 ${i + 1}，例如 anti-CD3 scFv`}
                         className="h-7 px-2 text-xs"
                       />
                     </div>
@@ -175,8 +175,8 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                         type="button"
                         title={
                           p.libraryId
-                            ? "再次保存为蛋白库中的新条目"
-                            : "保存到蛋白库，其他批次可直接选用"
+                            ? "再次保存为抗体库中的新条目"
+                            : "保存到抗体库，其他批次可直接选用"
                         }
                         onClick={() => void saveToLibrary(p)}
                         className="p-1 text-muted-foreground hover:text-foreground"
@@ -260,7 +260,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               onClick={add}
             >
               <Plus className="h-3.5 w-3.5" />
-              添加蛋白
+              添加抗体
             </Button>
             <Button
               size="sm"
@@ -269,7 +269,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               onClick={() => setLibraryOpen(true)}
             >
               <Library className="h-3.5 w-3.5" />
-              从蛋白库选择
+              从抗体库选择
             </Button>
           </div>
         </>
@@ -278,7 +278,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
       <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>我的蛋白库</DialogTitle>
+            <DialogTitle>我的抗体库</DialogTitle>
             <DialogDescription>
               所有实验批次共用。选用后数值会复制进本批次，之后修改库里的条目不会改动已记录的实验。
             </DialogDescription>
@@ -292,7 +292,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               </p>
             ) : library.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                蛋白库还是空的 —— 在上面填好一个蛋白，点保存图标即可存入。
+                抗体库还是空的 —— 在上面填好一个抗体，点保存图标即可存入。
               </p>
             ) : (
               library.map((item) => (
@@ -317,7 +317,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                   </Button>
                   <button
                     type="button"
-                    title="从蛋白库删除"
+                    title="从抗体库删除"
                     onClick={() => void removeFromLibrary(item)}
                     className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
                   >

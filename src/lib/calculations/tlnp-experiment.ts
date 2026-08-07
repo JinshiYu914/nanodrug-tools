@@ -41,18 +41,24 @@ import {
 } from "./lnp-bench";
 import { genId, todayISO } from "./ribogreen";
 import {
+  createCustomParam,
   createParamEntries,
   mergeParamEntries,
   paramsFilled,
   paramValue,
+  seedParamValue,
   type ParamEntry,
   INVITRO_PARAM_PRESETS,
   INVIVO_PARAM_PRESETS,
   PREP_PARAM_PRESETS,
 } from "./tlnp-params";
 
-/** v2 replaced module 2's sample × condition graph with the reaction matrix. */
-export const TLNP_SCHEMA_VERSION = 2;
+/**
+ * v2 replaced module 2's sample × condition graph with the reaction matrix.
+ * v3 dosed the reaction off 投料 RNA mass instead of an LNP volume, and turned
+ * module 4 into a parameter bench plus two purpose-built result tables.
+ */
+export const TLNP_SCHEMA_VERSION = 3;
 
 // ─── Shared result shapes ─────────────────────────────────
 
@@ -296,7 +302,11 @@ export function sampleIonizablePercent(s: BenchFormulation): string {
 export type ProteinConcUnit = "mg_per_mL" | "uM";
 
 /**
- * A protein as used in this batch.
+ * An antibody (蛋白/抗体) as used in this batch.
+ *
+ * The type is still called `ProteinEntry` because the DB discriminator and the
+ * library table are `protein`, and renaming those would need a migration for a
+ * change of wording. Every user-facing string says 抗体.
  *
  * Copied into the batch rather than referenced by id: the library row is a
  * convenience for not retyping a molecular weight, but a notebook has to still
@@ -317,7 +327,7 @@ export interface ProteinEntry {
 export function createProteinEntry(index = 0): ProteinEntry {
   return {
     id: genId(),
-    name: index === 0 ? "" : `蛋白 ${index + 1}`,
+    name: index === 0 ? "" : `抗体 ${index + 1}`,
     mw: "",
     conc: "",
     concUnit: "mg_per_mL",
@@ -354,12 +364,17 @@ export interface ReactionSystem {
   lnpName: string;
   /** ng/µL on an RNA basis — the same unit RiboGreen reports, deliberately. */
   lnpConc: string;
-  lnpVolume: string;
+  /**
+   * µg of RNA put into the reaction — the quantity actually decided at the
+   * bench. The LNP volume to pipette follows from it and the concentration, so
+   * it is computed rather than typed; typing both would let them disagree.
+   */
+  rnaMass: string;
   /** Linker lipid mol %, e.g. DSPE-PEG2k-mal at 0.5. */
   linkerPercent: string;
   basis: LnpBasis;
   proteinId: string;
-  /** linker : 蛋白 = 1 : this. Default 1. */
+  /** linker : 抗体 = 1 : this. Default 1. */
   molarRatio: string;
   temperature: string;
   duration: string;
@@ -396,13 +411,15 @@ export function createReactionSystem(index: number): ReactionSystem {
     sampleId: "",
     lnpName: "",
     lnpConc: "",
-    lnpVolume: "",
+    rnaMass: "",
     linkerPercent: "",
     basis: emptyLnpBasis(),
     proteinId: "",
     molarRatio: "1",
-    temperature: "室温",
-    duration: "2 h",
+    // Reaction conditions start blank on purpose: a temperature nobody chose is
+    // a temperature that gets exported as if it had been.
+    temperature: "",
+    duration: "",
     shaking: "",
     totalVolume: "",
     reactionBuffer: "PBS pH 7.4",
@@ -411,29 +428,39 @@ export function createReactionSystem(index: number): ReactionSystem {
 }
 
 /**
- * Seed a reaction system from a prepared sample.
+ * Everything a reaction system copies out of the prep sample it came from.
  *
- * Concentration and volume come from whatever the sample's RiboGreen result
- * says, so the common path — make LNP, measure it, react it — needs no retyping.
- * Everything stays editable afterwards.
+ * Split out because it is needed twice: once when a column is created, and
+ * again when the user asks for it to be brought up to date after editing the
+ * formulation. The copy is deliberate — see `LnpBasis` — so re-syncing is an
+ * explicit action, and `sampleDrift` is what tells the user it is worth taking.
  */
-export function systemFromSample(
+export interface SampleSnapshot {
+  lnpName: string;
+  lnpConc: string;
+  rnaMass: string;
+  linkerPercent: string;
+  basis: LnpBasis;
+}
+
+export function sampleSnapshot(
   sample: TlnpPrepSample,
-  index: number
-): ReactionSystem {
-  const base = createReactionSystem(index);
+  index = 0
+): SampleSnapshot {
   const ee = resolveEe(sample.ee);
   const ionizable = sample.lipidEntries.find((e) => e.typeKey === "ionizable");
   const custom = ionizable
     ? ionizable.isCustomLipid || !isKnownLipid("ionizable", ionizable.lipidName)
     : true;
+  // The whole measured prep is the default charge — conc × volume, in µg.
+  const rnaMass =
+    ee.conc === null || ee.volume === null
+      ? ""
+      : String(round2((ee.conc * ee.volume) / 1000));
   return {
-    ...base,
-    name: sample.name || `体系 ${index + 1}`,
-    sampleId: sample.id,
     lnpName: sample.name || `样品 ${index + 1}`,
     lnpConc: ee.conc === null ? "" : String(round2(ee.conc)),
-    lnpVolume: ee.volume === null ? "" : String(round2(ee.volume)),
+    rnaMass,
     linkerPercent: sampleLinkerPercent(sample),
     basis: {
       npRatio: sample.prep.npRatio,
@@ -442,6 +469,50 @@ export function systemFromSample(
         ? sample.prep.aminesPerMolecule
         : String(getAminesPerMolecule(ionizable?.lipidName ?? "")),
     },
+  };
+}
+
+/**
+ * Which snapshot fields no longer match the sample they were taken from.
+ *
+ * 投料 RNA is excluded: the user routinely reacts less than the whole prep, so
+ * a difference there is a decision, not staleness.
+ */
+export function sampleDrift(
+  system: ReactionSystem,
+  sample: TlnpPrepSample
+): string[] {
+  const snap = sampleSnapshot(sample);
+  const out: string[] = [];
+  if (snap.lnpName !== system.lnpName) out.push("样品名");
+  if (snap.lnpConc !== system.lnpConc) out.push("浓度");
+  if (snap.linkerPercent !== system.linkerPercent) out.push("linker 比例");
+  if (snap.basis.npRatio !== system.basis.npRatio) out.push("N/P");
+  if (snap.basis.ionizablePercent !== system.basis.ionizablePercent) {
+    out.push("阳离子 mol%");
+  }
+  if (snap.basis.aminesPerMolecule !== system.basis.aminesPerMolecule) {
+    out.push("可电离胺数");
+  }
+  return out;
+}
+
+/**
+ * Seed a reaction system from a prepared sample.
+ *
+ * Concentration and charge come from whatever the sample's RiboGreen result
+ * says, so the common path — make LNP, measure it, react it — needs no retyping.
+ * Everything stays editable afterwards.
+ */
+export function systemFromSample(
+  sample: TlnpPrepSample,
+  index: number
+): ReactionSystem {
+  return {
+    ...createReactionSystem(index),
+    ...sampleSnapshot(sample, index),
+    name: sample.name || `体系 ${index + 1}`,
+    sampleId: sample.id,
   };
 }
 
@@ -487,13 +558,6 @@ export interface Chromatogram {
   /** The text that was pasted, kept so the run can be corrected and re-parsed
    *  instead of re-pasted from scratch when one row was wrong. */
   rawText: string;
-  note: string;
-}
-
-export interface TemResult {
-  /** An external URL for now — base64 images do not belong in a JSONB row. */
-  imageUrl: string;
-  magnification: string;
   note: string;
 }
 
@@ -565,9 +629,10 @@ export interface TlnpPurificationModule {
   };
   chromatograms: Chromatogram[];
   results: {
-    /** One row per reaction system. */
+    /** One row per reaction system. Whether a TEM image exists is the `tem`
+     *  flag on each row; there is no batch-level image field, because the
+     *  question the notebook has to answer is "did we shoot this one?". */
     systems: SystemCharacterization[];
-    tem: TemResult;
     discussion: string;
   };
 }
@@ -583,57 +648,137 @@ export const PURIFICATION_METHOD_LABELS: Record<
 
 // ─── Module 4: 体内外实验 ─────────────────────────────────
 
-export interface MetricRow {
+/**
+ * Both arms' designs are nothing but a parameter bench.
+ *
+ * They used to be a fixed grid of Inputs *and* a bench, which asked for the
+ * cell line twice and let the two answers disagree. The bench won: it is the
+ * half that can grow a new cell line or a new readout without a deploy, and
+ * every value in it is still one click away from being a chip next time.
+ */
+export interface AssayDesign {
+  date: string;
+  params: ParamEntry[];
+  note: string;
+}
+
+/** What the plate was read on. */
+export type InVitroReadout = "luciferase" | "fluorescence";
+/** Flow reports either a brightness or a positive fraction — never both. */
+export type FluorescenceMetric = "mfi" | "percent";
+
+export const INVITRO_READOUT_LABELS: Record<InVitroReadout, string> = {
+  luciferase: "Luciferase",
+  fluorescence: "荧光蛋白",
+};
+
+export const FLUORESCENCE_METRIC_LABELS: Record<FluorescenceMetric, string> = {
+  mfi: "MFI",
+  percent: "阳性率 (%)",
+};
+
+export function invitroUnitLabel(r: {
+  readout: InVitroReadout;
+  fluorMetric: FluorescenceMetric;
+}): string {
+  if (r.readout === "luciferase") return "RLU";
+  return FLUORESCENCE_METRIC_LABELS[r.fluorMetric];
+}
+
+export interface InVitroColumn {
   id: string;
-  /** Which sample / product this measurement belongs to. */
-  label: string;
-  /** Free-text grouping — 组别, timepoint, replicate, whatever the assay needs. */
-  group: string;
-  value: string;
-  unit: string;
-  note: string;
+  name: string;
 }
 
-export interface InVitroDesign {
-  date: string;
-  cellLine: string;
-  /** 原代代数, e.g. A1P1. */
-  passage: string;
-  plate: string;
-  seedingDensity: string;
-  dose: string;
-  timepoints: string;
-  params: ParamEntry[];
-  note: string;
+/** One technical/biological repeat. `values` is index-aligned with `columns`. */
+export interface InVitroReplicate {
+  id: string;
+  values: string[];
 }
 
-export interface InVivoDesign {
-  date: string;
-  species: string;
-  strain: string;
-  route: string;
-  dose: string;
-  groups: string;
-  timepoints: string;
-  params: ParamEntry[];
-  note: string;
+export interface InVitroResults {
+  readout: InVitroReadout;
+  fluorMetric: FluorescenceMetric;
+  columns: InVitroColumn[];
+  replicates: InVitroReplicate[];
+  discussion: string;
+}
+
+/**
+ * One organ ROI off the imager.
+ *
+ * Kept as strings, like every other typed field in the model, so a half-typed
+ * cell is representable; the charts parse on read.
+ */
+export interface RoiRow {
+  id: string;
+  sample: string;
+  organ: string;
+  totalRoi: string;
+  avgRoi: string;
+}
+
+export interface InVivoResults {
+  /** The pasted block, kept so it can be corrected and re-parsed. */
+  rawText: string;
+  rows: RoiRow[];
+  discussion: string;
 }
 
 export interface TlnpAssayModule {
   /** Which arm the user is working in — both are always persisted. */
   active: "invitro" | "invivo";
-  invitro: {
-    design: InVitroDesign;
-    results: { rows: MetricRow[]; discussion: string };
-  };
-  invivo: {
-    design: InVivoDesign;
-    results: { rows: MetricRow[]; discussion: string };
+  invitro: { design: AssayDesign; results: InVitroResults };
+  invivo: { design: AssayDesign; results: InVivoResults };
+}
+
+export function createInVitroColumn(name = ""): InVitroColumn {
+  return { id: genId(), name };
+}
+
+export function createInVitroReplicate(width: number): InVitroReplicate {
+  return { id: genId(), values: Array.from({ length: width }, () => "") };
+}
+
+export function emptyInVitroResults(): InVitroResults {
+  return {
+    readout: "luciferase",
+    fluorMetric: "mfi",
+    columns: [],
+    replicates: [],
+    discussion: "",
   };
 }
 
-export function createMetricRow(label = ""): MetricRow {
-  return { id: genId(), label, group: "", value: "", unit: "", note: "" };
+export function emptyInVivoResults(): InVivoResults {
+  return { rawText: "", rows: [], discussion: "" };
+}
+
+export interface InVitroColumnStat {
+  id: string;
+  name: string;
+  values: number[];
+  mean: number | null;
+  /** Sample SD (n−1). Null below two replicates, where it has no meaning. */
+  sd: number | null;
+}
+
+/** Per-sample mean ± SD down the replicate rows — what the bar chart draws. */
+export function summarizeInVitro(r: InVitroResults): InVitroColumnStat[] {
+  return r.columns.map((c, i) => {
+    const values = r.replicates
+      .map((rep) => numOrNull(rep.values[i] ?? ""))
+      .filter((v): v is number => v !== null);
+    const n = values.length;
+    const avg = n > 0 ? values.reduce((s, v) => s + v, 0) / n : null;
+    const sd =
+      n > 1 && avg !== null
+        ? Math.sqrt(
+            values.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1)
+          )
+        : null;
+    return { id: c.id, name: c.name || `样本 ${i + 1}`, values, mean: avg, sd };
+  });
 }
 
 // ─── The batch ────────────────────────────────────────────
@@ -692,41 +837,25 @@ export function emptyTlnpExperiment(): TlnpExperimentData {
         note: "",
       },
       chromatograms: [],
-      results: {
-        systems: [],
-        tem: { imageUrl: "", magnification: "", note: "" },
-        discussion: "",
-      },
+      results: { systems: [], discussion: "" },
     },
     assay: {
       active: "invitro",
       invitro: {
         design: {
           date: "",
-          cellLine: "",
-          passage: "",
-          plate: "",
-          seedingDensity: "",
-          dose: "",
-          timepoints: "",
           params: createParamEntries(INVITRO_PARAM_PRESETS),
           note: "",
         },
-        results: { rows: [], discussion: "" },
+        results: emptyInVitroResults(),
       },
       invivo: {
         design: {
           date: "",
-          species: "",
-          strain: "",
-          route: "",
-          dose: "",
-          groups: "",
-          timepoints: "",
           params: createParamEntries(INVIVO_PARAM_PRESETS),
           note: "",
         },
-        results: { rows: [], discussion: "" },
+        results: emptyInVivoResults(),
       },
     },
   };
@@ -859,6 +988,19 @@ function parseProtein(raw: unknown, index: number): ProteinEntry {
   };
 }
 
+/**
+ * v2 stored an LNP volume; v3 stores the RNA mass that volume delivered.
+ *
+ * Converting rather than dropping keeps every already-recorded reaction
+ * dosing to the same numbers it did before the change.
+ */
+function rnaMassFromLegacy(o: Record<string, unknown>): string {
+  const conc = num(o.lnpConc);
+  const volume = num(o.lnpVolume);
+  if (conc === null || volume === null || !(conc > 0) || !(volume > 0)) return "";
+  return String(round2((conc * volume) / 1000));
+}
+
 function parseSystem(raw: unknown, index: number): ReactionSystem {
   const o = obj(raw);
   const base = createReactionSystem(index);
@@ -869,7 +1011,7 @@ function parseSystem(raw: unknown, index: number): ReactionSystem {
     sampleId: str(o.sampleId),
     lnpName: str(o.lnpName),
     lnpConc: str(o.lnpConc),
-    lnpVolume: str(o.lnpVolume),
+    rnaMass: str(o.rnaMass) || rnaMassFromLegacy(o),
     linkerPercent: str(o.linkerPercent),
     basis: {
       npRatio: str(b.npRatio, base.basis.npRatio),
@@ -915,7 +1057,7 @@ function systemsFromLegacyGraph(
     if (hit) return hit.id;
     const next: ProteinEntry = {
       ...createProteinEntry(proteins.length),
-      name: name || `蛋白 ${proteins.length + 1}`,
+      name: name || `抗体 ${proteins.length + 1}`,
       mw,
       conc,
       concUnit: pick(c.proteinConcUnit, ["mg_per_mL", "uM"] as const, "mg_per_mL"),
@@ -946,15 +1088,23 @@ function systemsFromLegacyGraph(
       ? systemFromSample(sample, i)
       : createReactionSystem(i);
     const conditionName = str(c.name);
+    const lnpConc = str(c.lnpConc) || seeded.lnpConc;
+    // v1 already offered µg as an alternative to µL, and µg is now the only
+    // unit — so half of these carry across with no conversion at all.
+    const amount = str(c.lnpAmount);
+    const rnaMass = !amount
+      ? seeded.rnaMass
+      : str(c.lnpAmountUnit) === "ug"
+        ? amount
+        : rnaMassFromLegacy({ lnpConc, lnpVolume: amount }) || seeded.rnaMass;
     return {
       ...seeded,
       name:
         pair.nameOverride ||
         [sample?.name, conditionName].filter(Boolean).join("-") ||
         seeded.name,
-      lnpConc: str(c.lnpConc) || seeded.lnpConc,
-      lnpVolume:
-        str(c.lnpAmountUnit) === "ug" ? seeded.lnpVolume : str(c.lnpAmount) || seeded.lnpVolume,
+      lnpConc,
+      rnaMass,
       linkerPercent: seeded.linkerPercent,
       proteinId: proteinFor(c),
       // The v1 ratio was 蛋白:RNA and has no meaning under linker:蛋白 — a
@@ -1023,16 +1173,101 @@ function parseSystemCharacterization(raw: unknown): SystemCharacterization {
   };
 }
 
-function parseMetricRow(raw: unknown): MetricRow {
+/** Append whatever a v2 batch recorded in its TEM box to the discussion. */
+function withLegacyTem(discussion: string, tem: Record<string, unknown>): string {
+  const detail = [str(tem.imageUrl), str(tem.magnification), str(tem.note)]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" · ");
+  if (!detail) return discussion;
+  const line = `TEM：${detail}`;
+  if (discussion.includes(line)) return discussion;
+  return discussion.trim() ? `${discussion}\n\n${line}` : line;
+}
+
+function parseInVitroResults(raw: unknown): InVitroResults {
   const o = obj(raw);
-  return {
-    id: str(o.id) || genId(),
-    label: str(o.label),
-    group: str(o.group),
-    value: str(o.value),
-    unit: str(o.unit),
-    note: str(o.note),
-  };
+  const out = emptyInVitroResults();
+  out.readout = pick(o.readout, ["luciferase", "fluorescence"] as const, "luciferase");
+  out.fluorMetric = pick(o.fluorMetric, ["mfi", "percent"] as const, "mfi");
+  out.columns = arr(o.columns).map((c) => {
+    const co = obj(c);
+    return { id: str(co.id) || genId(), name: str(co.name) };
+  });
+  const width = out.columns.length;
+  out.replicates = arr(o.replicates).map((r) => {
+    const ro = obj(r);
+    const values = arr(ro.values).map((v) => str(v));
+    // Pad or trim to the column count so an index is always addressable —
+    // a column added in another tab must not make every row read undefined.
+    return {
+      id: str(ro.id) || genId(),
+      values: Array.from({ length: width }, (_, i) => values[i] ?? ""),
+    };
+  });
+  out.discussion = str(o.discussion);
+
+  // v2 kept a flat 样本/分组/数值/单位 list. Each distinct 样本 becomes a
+  // column and each of its values a replicate, so the numbers survive the
+  // change of shape even though 分组 has nowhere to go.
+  if (out.columns.length === 0 && Array.isArray(o.rows)) {
+    const byName = new Map<string, string[]>();
+    for (const r of arr(o.rows).map(obj)) {
+      const label = str(r.label).trim() || "未命名";
+      const list = byName.get(label) ?? [];
+      list.push(str(r.value));
+      byName.set(label, list);
+    }
+    out.columns = [...byName.keys()].map((name) => createInVitroColumn(name));
+    const depth = Math.max(0, ...[...byName.values()].map((v) => v.length));
+    out.replicates = Array.from({ length: depth }, (_, row) => ({
+      id: genId(),
+      values: [...byName.values()].map((v) => v[row] ?? ""),
+    }));
+  }
+  return out;
+}
+
+function parseInVivoResults(raw: unknown): InVivoResults {
+  const o = obj(raw);
+  const rows: RoiRow[] = arr(o.rows).map((r) => {
+    const ro = obj(r);
+    return {
+      id: str(ro.id) || genId(),
+      // v2's flat metric rows had 样本 in `label` and no organ column; keeping
+      // the name means the paste box opens with the samples already listed.
+      sample: str(ro.sample) || str(ro.label),
+      organ: str(ro.organ),
+      totalRoi: str(ro.totalRoi) || str(ro.value),
+      avgRoi: str(ro.avgRoi),
+    };
+  });
+  return { rawText: str(o.rawText), rows, discussion: str(o.discussion) };
+}
+
+/**
+ * Fold v2's typed design fields into the parameter bench that replaced them.
+ *
+ * Only fills blanks, so a value already recorded in the bench wins over the
+ * duplicate that used to sit beside it.
+ */
+function seedAssayParams(
+  params: ParamEntry[],
+  design: Record<string, unknown>,
+  map: [string, string][],
+  extras: [string, string][]
+): ParamEntry[] {
+  let out = params;
+  for (const [field, id] of map) out = seedParamValue(out, id, str(design[field]));
+  // Fields with no home in the new bank become custom entries rather than
+  // being dropped — a notebook may not quietly forget a recorded number.
+  for (const [field, label] of extras) {
+    const v = str(design[field]).trim();
+    if (v && !out.some((e) => e.label === label)) {
+      out = [...out, createCustomParam(label, v)];
+    }
+  }
+  return out;
 }
 
 export function parseTlnpExperiment(
@@ -1114,7 +1349,6 @@ export function parseTlnpExperiment(
   const uf = obj(purDesign.ultrafiltration);
   const dia = obj(purDesign.dialysis);
   const purResults = obj(pur.results);
-  const tem = obj(purResults.tem);
   d.purification = {
     design: {
       date: str(purDesign.date),
@@ -1156,12 +1390,12 @@ export function parseTlnpExperiment(
     chromatograms: arr(pur.chromatograms).map(parseChromatogram),
     results: {
       systems: arr(purResults.systems).map(parseSystemCharacterization),
-      tem: {
-        imageUrl: str(tem.imageUrl),
-        magnification: str(tem.magnification),
-        note: str(tem.note),
-      },
-      discussion: str(purResults.discussion),
+      // v2's batch-level TEM link/magnification/描述 is folded into the
+      // discussion rather than dropped, since the box that edited it is gone.
+      discussion: withLegacyTem(
+        str(purResults.discussion),
+        obj(purResults.tem)
+      ),
     },
   };
 
@@ -1178,36 +1412,41 @@ export function parseTlnpExperiment(
     invitro: {
       design: {
         date: str(vitroDesign.date),
-        cellLine: str(vitroDesign.cellLine),
-        passage: str(vitroDesign.passage),
-        plate: str(vitroDesign.plate),
-        seedingDensity: str(vitroDesign.seedingDensity),
-        dose: str(vitroDesign.dose),
-        timepoints: str(vitroDesign.timepoints),
-        params: mergeParamEntries(INVITRO_PARAM_PRESETS, vitroDesign.params),
+        params: seedAssayParams(
+          mergeParamEntries(INVITRO_PARAM_PRESETS, vitroDesign.params),
+          vitroDesign,
+          [
+            ["cellLine", "cellLine"],
+            ["passage", "passage"],
+            ["plate", "plate"],
+            ["dose", "dose"],
+            ["timepoints", "timepoint"],
+          ],
+          [["seedingDensity", "转染时细胞密度"]]
+        ),
         note: str(vitroDesign.note),
       },
-      results: {
-        rows: arr(vitroResults.rows).map(parseMetricRow),
-        discussion: str(vitroResults.discussion),
-      },
+      results: parseInVitroResults(vitroResults),
     },
     invivo: {
       design: {
         date: str(vivoDesign.date),
-        species: str(vivoDesign.species),
-        strain: str(vivoDesign.strain),
-        route: str(vivoDesign.route),
-        dose: str(vivoDesign.dose),
-        groups: str(vivoDesign.groups),
-        timepoints: str(vivoDesign.timepoints),
-        params: mergeParamEntries(INVIVO_PARAM_PRESETS, vivoDesign.params),
+        params: seedAssayParams(
+          mergeParamEntries(INVIVO_PARAM_PRESETS, vivoDesign.params),
+          vivoDesign,
+          [
+            ["species", "species"],
+            ["strain", "strain"],
+            ["route", "route"],
+            ["dose", "dose"],
+            ["groups", "replicates"],
+            ["timepoints", "timepoint"],
+          ],
+          []
+        ),
         note: str(vivoDesign.note),
       },
-      results: {
-        rows: arr(vivoResults.rows).map(parseMetricRow),
-        discussion: str(vivoResults.discussion),
-      },
+      results: parseInVivoResults(vivoResults),
     },
   };
 
@@ -1256,16 +1495,15 @@ export function moduleFilled(
         d.purification.design.method !== "" ||
         d.purification.chromatograms.length > 0 ||
         d.purification.results.systems.length > 0 ||
-        d.purification.results.discussion.trim() !== "" ||
-        d.purification.results.tem.imageUrl.trim() !== ""
+        d.purification.results.discussion.trim() !== ""
       );
     case 4: {
       const a = d.assay;
       return (
-        a.invitro.results.rows.length > 0 ||
+        a.invitro.results.columns.length > 0 ||
         a.invivo.results.rows.length > 0 ||
-        a.invitro.design.cellLine.trim() !== "" ||
-        a.invivo.design.species.trim() !== "" ||
+        paramsFilled(a.invitro.design.params) ||
+        paramsFilled(a.invivo.design.params) ||
         a.invitro.results.discussion.trim() !== "" ||
         a.invivo.results.discussion.trim() !== ""
       );

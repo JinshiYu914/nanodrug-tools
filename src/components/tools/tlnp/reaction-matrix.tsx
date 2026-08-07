@@ -1,19 +1,20 @@
 "use client";
 
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { genId } from "@/lib/calculations/ribogreen";
 import {
   createReactionSystem,
-  sampleIonizablePercent,
-  sampleLinkerPercent,
+  sampleDrift,
+  sampleSnapshot,
   systemFromSample,
   type ProteinEntry,
   type ReactionSystem,
   type TlnpPrepSample,
 } from "@/lib/calculations/tlnp-experiment";
 import { linkerNmolPerUgRna } from "@/lib/calculations/tlnp-conjugation";
+import OptionSelect from "./option-select";
 
 interface Props {
   systems: ReactionSystem[];
@@ -23,7 +24,7 @@ interface Props {
 }
 
 const TEMPERATURES = ["4 °C", "室温", "25 °C", "37 °C"];
-const DURATIONS = ["30 min", "1 h", "2 h", "4 h", "过夜"];
+const DURATIONS = ["2 h", "4 h", "8 h", "12 h", "16 h", "20 h"];
 const SHAKING = ["静置", "300 rpm", "500 rpm", "800 rpm", "翻转混匀"];
 
 /**
@@ -54,21 +55,65 @@ export default function ReactionMatrix({
     }
     const sample = samples.find((s) => s.id === sampleId);
     if (!sample) return;
-    const seeded = systemFromSample(sample, 0);
+    const snap = sampleSnapshot(sample);
     patch(system.id, {
       sampleId,
-      lnpName: seeded.lnpName,
-      lnpConc: seeded.lnpConc || system.lnpConc,
-      lnpVolume: seeded.lnpVolume || system.lnpVolume,
-      linkerPercent: sampleLinkerPercent(sample) || system.linkerPercent,
-      basis: {
-        npRatio: sample.prep.npRatio,
-        ionizablePercent:
-          sampleIonizablePercent(sample) || system.basis.ionizablePercent,
-        aminesPerMolecule: seeded.basis.aminesPerMolecule,
-      },
+      lnpName: snap.lnpName,
+      lnpConc: snap.lnpConc || system.lnpConc,
+      // The charge is the user's decision once they have made one — repointing
+      // the column shouldn't quietly re-dose a reaction they already sized.
+      rnaMass: system.rnaMass || snap.rnaMass,
+      linkerPercent: snap.linkerPercent || system.linkerPercent,
+      basis: snap.basis,
     });
   }
+
+  /**
+   * Bring a column back in line with the sample it came from.
+   *
+   * The snapshot is copied, not referenced (see `LnpBasis`), so editing the
+   * formulation in module 1 deliberately leaves module 2 alone — otherwise a
+   * correction made in March would rewrite what a January notebook says was
+   * pipetted. This button is how the user asks for the update anyway.
+   */
+  function resync(system: ReactionSystem) {
+    const sample = samples.find((s) => s.id === system.sampleId);
+    if (!sample) return;
+    const snap = sampleSnapshot(sample);
+    patch(system.id, {
+      lnpName: snap.lnpName,
+      lnpConc: snap.lnpConc,
+      linkerPercent: snap.linkerPercent,
+      basis: snap.basis,
+    });
+  }
+
+  function resyncAll() {
+    onChange(
+      systems.map((s) => {
+        const sample = samples.find((x) => x.id === s.sampleId);
+        if (!sample) return s;
+        const snap = sampleSnapshot(sample);
+        return {
+          ...s,
+          lnpName: snap.lnpName,
+          lnpConc: snap.lnpConc,
+          linkerPercent: snap.linkerPercent,
+          basis: snap.basis,
+        };
+      })
+    );
+  }
+
+  /** Columns whose copy no longer matches the sample it was taken from. */
+  const drifted = systems
+    .map((s) => {
+      const sample = samples.find((x) => x.id === s.sampleId);
+      return sample ? { system: s, fields: sampleDrift(s, sample) } : null;
+    })
+    .filter((d): d is { system: ReactionSystem; fields: string[] } =>
+      d !== null && d.fields.length > 0
+    );
 
   function addFromSample(sample: TlnpPrepSample) {
     onChange([...systems, systemFromSample(sample, systems.length)]);
@@ -134,6 +179,24 @@ export default function ReactionMatrix({
 
   return (
     <div className="space-y-3">
+      {drifted.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/35 bg-warning-subtle px-3 py-2 text-xs text-warning">
+          <span>
+            {drifted.length} 个体系的 LNP 信息与「LNP 制备」里的样品已不一致（
+            {[...new Set(drifted.flatMap((d) => d.fields))].join("、")}）。
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7 gap-1.5 text-xs"
+            onClick={resyncAll}
+          >
+            <RefreshCw className="h-3 w-3" />
+            全部更新
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border">
         <table className="border-collapse text-xs">
           <thead>
@@ -173,22 +236,45 @@ export default function ReactionMatrix({
           </thead>
           <tbody>
             <Row label="LNP 来源">
-              {systems.map((s) => (
-                <Cell key={s.id}>
-                  <select
-                    value={s.sampleId}
-                    onChange={(e) => pickSample(s, e.target.value)}
-                    className="h-7 w-full rounded-md border border-input bg-transparent px-1 text-xs"
-                  >
-                    <option value="">手动输入</option>
-                    {samples.map((sample, i) => (
-                      <option key={sample.id} value={sample.id}>
-                        {sample.name || `样品 ${i + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </Cell>
-              ))}
+              {systems.map((s) => {
+                const stale = drifted.find((d) => d.system.id === s.id);
+                return (
+                  <Cell key={s.id}>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={s.sampleId}
+                        onChange={(e) => pickSample(s, e.target.value)}
+                        className="h-7 min-w-0 flex-1 rounded-md border border-input bg-transparent px-1 text-xs"
+                      >
+                        <option value="">手动输入</option>
+                        {samples.map((sample, i) => (
+                          <option key={sample.id} value={sample.id}>
+                            {sample.name || `样品 ${i + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                      {s.sampleId && (
+                        <button
+                          type="button"
+                          onClick={() => resync(s)}
+                          title={
+                            stale
+                              ? `样品已改动（${stale.fields.join("、")}），点此更新`
+                              : "与该样品一致"
+                          }
+                          className={`shrink-0 p-0.5 ${
+                            stale
+                              ? "text-warning hover:text-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </Cell>
+                );
+              })}
             </Row>
 
             <Row label="LNP 浓度 (ng/µL)">
@@ -202,12 +288,12 @@ export default function ReactionMatrix({
               ))}
             </Row>
 
-            <Row label="LNP 体积 (µL)">
+            <Row label="投料 LNP-RNA (µg)">
               {systems.map((s) => (
                 <Cell key={s.id}>
                   <NumInput
-                    value={s.lnpVolume}
-                    onChange={(v) => patch(s.id, { lnpVolume: v })}
+                    value={s.rnaMass}
+                    onChange={(v) => patch(s.id, { rnaMass: v })}
                   />
                 </Cell>
               ))}
@@ -232,7 +318,7 @@ export default function ReactionMatrix({
               })}
             </Row>
 
-            <Row label="蛋白">
+            <Row label="抗体">
               {systems.map((s) => (
                 <Cell key={s.id}>
                   <select
@@ -243,7 +329,7 @@ export default function ReactionMatrix({
                     <option value="">未选择</option>
                     {proteins.map((p, i) => (
                       <option key={p.id} value={p.id}>
-                        {p.name || `蛋白 ${i + 1}`}
+                        {p.name || `抗体 ${i + 1}`}
                       </option>
                     ))}
                   </select>
@@ -251,11 +337,14 @@ export default function ReactionMatrix({
               ))}
             </Row>
 
-            <Row label="linker : 蛋白">
+            <Row label="linker : 抗体 摩尔比">
               {systems.map((s) => (
                 <Cell key={s.id}>
                   <div className="flex items-center gap-1">
-                    <span className="font-mono text-xs text-muted-foreground">
+                    {/* shrink-0 + nowrap: without them flex squeezes this to
+                        its minimum content width and "1" and ":" land on
+                        separate lines, reading as two different numbers. */}
+                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
                       1 :
                     </span>
                     <NumInput
@@ -270,7 +359,7 @@ export default function ReactionMatrix({
             <Row label="反应温度">
               {systems.map((s) => (
                 <Cell key={s.id}>
-                  <PickInput
+                  <OptionSelect
                     value={s.temperature}
                     options={TEMPERATURES}
                     onChange={(v) => patch(s.id, { temperature: v })}
@@ -282,7 +371,7 @@ export default function ReactionMatrix({
             <Row label="反应时间">
               {systems.map((s) => (
                 <Cell key={s.id}>
-                  <PickInput
+                  <OptionSelect
                     value={s.duration}
                     options={DURATIONS}
                     onChange={(v) => patch(s.id, { duration: v })}
@@ -294,7 +383,7 @@ export default function ReactionMatrix({
             <Row label="摇床条件">
               {systems.map((s) => (
                 <Cell key={s.id}>
-                  <PickInput
+                  <OptionSelect
                     value={s.shaking}
                     options={SHAKING}
                     onChange={(v) => patch(s.id, { shaking: v })}
@@ -368,33 +457,3 @@ function NumInput({
   );
 }
 
-/**
- * Free text with a datalist of the usual answers — the common values are one
- * keystroke away, and anything else is still typeable.
- */
-function PickInput({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: string[];
-  onChange: (v: string) => void;
-}) {
-  const listId = `pick-${options[0]}`;
-  return (
-    <>
-      <Input
-        value={value}
-        list={listId}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 px-2 text-xs"
-      />
-      <datalist id={listId}>
-        {options.map((o) => (
-          <option key={o} value={o} />
-        ))}
-      </datalist>
-    </>
-  );
-}
