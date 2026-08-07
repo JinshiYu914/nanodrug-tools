@@ -718,11 +718,33 @@ export interface RoiRow {
   avgRoi: string;
 }
 
-export interface InVivoResults {
-  /** The pasted block, kept so it can be corrected and re-parsed. */
+/**
+ * One imaging session, named and managed like a chromatogram.
+ *
+ * A batch is imaged more than once — 6 h and 24 h, or in vivo then ex vivo —
+ * and those are different figures, not more rows of one. Each run keeps the
+ * text that was pasted so it can be corrected and re-parsed rather than
+ * re-pasted from scratch.
+ */
+export interface RoiRun {
+  id: string;
+  name: string;
   rawText: string;
   rows: RoiRow[];
+  note: string;
+}
+
+export interface InVivoResults {
+  runs: RoiRun[];
   discussion: string;
+}
+
+export function createRoiRun(
+  name: string,
+  rawText: string,
+  rows: RoiRow[]
+): RoiRun {
+  return { id: genId(), name, rawText, rows, note: "" };
 }
 
 export interface TlnpAssayModule {
@@ -751,7 +773,98 @@ export function emptyInVitroResults(): InVitroResults {
 }
 
 export function emptyInVivoResults(): InVivoResults {
-  return { rawText: "", rows: [], discussion: "" };
+  return { runs: [], discussion: "" };
+}
+
+// ─── 体外 clipboard ───────────────────────────────────────
+
+/**
+ * Does this grid start with a row of sample names?
+ *
+ * A header is a first row with no numbers in it. Value rows are all numbers by
+ * definition, so this needs no user input and can't misfire on a plate read.
+ */
+function gridHasHeader(grid: string[][]): boolean {
+  const first = grid[0];
+  if (!first || first.length === 0) return false;
+  return first.every((c) => c.trim() === "" || numOrNull(c) === null);
+}
+
+/**
+ * Build a whole result table out of one paste.
+ *
+ * Used by 「粘贴数据」, where the user copies the block straight out of the
+ * plate reader's sheet — sample names across the top, one row per well.
+ */
+export function inVitroFromGrid(
+  grid: string[][]
+): Pick<InVitroResults, "columns" | "replicates"> {
+  const rows = grid.filter((r) => r.some((c) => c.trim() !== ""));
+  if (rows.length === 0) return { columns: [], replicates: [] };
+
+  const header = gridHasHeader(rows) ? rows[0] : null;
+  const body = header ? rows.slice(1) : rows;
+  const width = Math.max(header?.length ?? 0, ...body.map((r) => r.length));
+
+  return {
+    columns: Array.from({ length: width }, (_, i) =>
+      createInVitroColumn(header?.[i]?.trim() || "")
+    ),
+    replicates: body.map((r) => ({
+      id: genId(),
+      values: Array.from({ length: width }, (_, i) => r[i]?.trim() ?? ""),
+    })),
+  };
+}
+
+/**
+ * Drop a pasted grid into an existing table at one cell, growing it to fit.
+ *
+ * Growing rather than clipping is the point: pasting three wells into a table
+ * that has one row should give three rows, not silently discard two thirds of
+ * the data.
+ */
+export function applyGridToInVitro(
+  r: InVitroResults,
+  grid: string[][],
+  atRow: number,
+  atCol: number
+): InVitroResults {
+  const rows = grid.filter((g) => g.some((c) => c.trim() !== ""));
+  if (rows.length === 0) return r;
+
+  const width = Math.max(atCol + Math.max(...rows.map((g) => g.length)), r.columns.length);
+  const height = Math.max(atRow + rows.length, r.replicates.length);
+
+  const columns = Array.from(
+    { length: width },
+    (_, i) => r.columns[i] ?? createInVitroColumn("")
+  );
+  const replicates = Array.from({ length: height }, (_, i) => {
+    const existing = r.replicates[i];
+    const base = Array.from(
+      { length: width },
+      (_, k) => existing?.values[k] ?? ""
+    );
+    const from = rows[i - atRow];
+    if (from) {
+      from.forEach((cell, k) => {
+        if (atCol + k < width) base[atCol + k] = cell.trim();
+      });
+    }
+    return { id: existing?.id ?? genId(), values: base };
+  });
+
+  return { ...r, columns, replicates };
+}
+
+/** The table as Excel expects it back: names across the top, wells below. */
+export function inVitroToTsv(r: InVitroResults): string {
+  const head = r.columns.map((c, i) => c.name || `样本 ${i + 1}`);
+  const body = r.replicates.map((rep) =>
+    r.columns.map((_, i) => rep.values[i] ?? "")
+  );
+  return [head, ...body].map((row) => row.join("\t")).join("\n");
 }
 
 export interface InVitroColumnStat {
@@ -1228,9 +1341,8 @@ function parseInVitroResults(raw: unknown): InVitroResults {
   return out;
 }
 
-function parseInVivoResults(raw: unknown): InVivoResults {
-  const o = obj(raw);
-  const rows: RoiRow[] = arr(o.rows).map((r) => {
+function parseRoiRows(raw: unknown): RoiRow[] {
+  return arr(raw).map((r) => {
     const ro = obj(r);
     return {
       id: str(ro.id) || genId(),
@@ -1242,7 +1354,34 @@ function parseInVivoResults(raw: unknown): InVivoResults {
       avgRoi: str(ro.avgRoi),
     };
   });
-  return { rawText: str(o.rawText), rows, discussion: str(o.discussion) };
+}
+
+function parseInVivoResults(raw: unknown): InVivoResults {
+  const o = obj(raw);
+  const runs: RoiRun[] = arr(o.runs).map((r, i) => {
+    const ro = obj(r);
+    return {
+      id: str(ro.id) || genId(),
+      name: str(ro.name, `成像结果 ${i + 1}`),
+      rawText: str(ro.rawText),
+      rows: parseRoiRows(ro.rows),
+      note: str(ro.note),
+    };
+  });
+
+  // Before runs existed there was exactly one unnamed paste. Fold it into the
+  // first run rather than dropping it.
+  if (runs.length === 0 && (str(o.rawText) || arr(o.rows).length > 0)) {
+    runs.push({
+      id: genId(),
+      name: "成像结果 1",
+      rawText: str(o.rawText),
+      rows: parseRoiRows(o.rows),
+      note: "",
+    });
+  }
+
+  return { runs, discussion: str(o.discussion) };
 }
 
 /**
@@ -1434,9 +1573,13 @@ export function parseTlnpExperiment(
         params: seedAssayParams(
           mergeParamEntries(INVIVO_PARAM_PRESETS, vivoDesign.params),
           vivoDesign,
+          // v2's 动物 held things like "BALB/c 小鼠", which is a 品系; its
+          // 品系 field was labelled 品系 / 周龄 and held "雌性 6–8 周". Each
+          // lands in the new field that actually asks for it, and
+          // seedParamValue only fills blanks, so neither can clobber the other.
           [
-            ["species", "species"],
-            ["strain", "strain"],
+            ["species", "strain"],
+            ["strain", "age"],
             ["route", "route"],
             ["dose", "dose"],
             ["groups", "replicates"],
@@ -1501,7 +1644,7 @@ export function moduleFilled(
       const a = d.assay;
       return (
         a.invitro.results.columns.length > 0 ||
-        a.invivo.results.rows.length > 0 ||
+        a.invivo.results.runs.length > 0 ||
         paramsFilled(a.invitro.design.params) ||
         paramsFilled(a.invivo.design.params) ||
         a.invitro.results.discussion.trim() !== "" ||

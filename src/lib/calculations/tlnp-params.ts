@@ -38,6 +38,17 @@ export interface ParamPreset {
   label: string;
   options: string[];
   multi?: boolean;
+  /**
+   * Options this bank used to offer and no longer should.
+   *
+   * Needed because an entry's `options` are persisted: dropping a value from
+   * the code-side list is not enough, since `mergeParamEntries` unions the
+   * stored array back in and the retired chip would reappear on every batch
+   * that ever saw it. A retired option is still shown when it is the recorded
+   * answer — the notebook has to keep reading correctly — it just stops being
+   * offered to new entries.
+   */
+  retired?: string[];
   placeholder?: string;
 }
 
@@ -110,6 +121,7 @@ export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
     id: "cellLine",
     label: "细胞系",
     options: ["人 T cell", "小鼠 T cell", "Hep3B", "HEK293T", "RAW264.7", "DC2.4"],
+    retired: ["原代 T 细胞", "A549", "HeLa"],
     placeholder: "其他细胞系",
   },
   {
@@ -128,6 +140,7 @@ export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
     id: "readout",
     label: "检测指标",
     options: ["Luciferase", "荧光蛋白流式", "Cell Titer", "CCK-8", "共聚焦"],
+    retired: ["eGFP 流式", "qPCR"],
     multi: true,
     placeholder: "其他指标",
   },
@@ -145,13 +158,16 @@ export const INVITRO_PARAM_PRESETS: ParamPreset[] = [
   },
 ];
 
+/**
+ * There is no 动物 field: 品系 already answers it, and two boxes for one fact
+ * is how a batch ends up saying 小鼠 next to SD. A value recorded in the old
+ * 动物 field is not destroyed — `mergeParamEntries` keeps an entry whose id is
+ * no longer a preset, so it reappears as a deletable custom field.
+ *
+ * 周龄 / 给药途径 / 检测时间点 / 检测指标 are multi: one study routinely runs
+ * two ages, two routes, several timepoints and several readouts at once.
+ */
 export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
-  {
-    id: "species",
-    label: "动物",
-    options: ["小鼠", "大鼠", "兔"],
-    placeholder: "其他动物",
-  },
   {
     id: "strain",
     label: "品系",
@@ -161,7 +177,9 @@ export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
   {
     id: "age",
     label: "周龄",
-    options: ["4 周", "6 周", "8 周", "10 周"],
+    options: ["6-8 周龄", "8-10 周龄"],
+    retired: ["4 周", "6 周", "8 周", "10 周"],
+    multi: true,
     placeholder: "其他周龄",
   },
   {
@@ -180,6 +198,7 @@ export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
     id: "route",
     label: "给药途径",
     options: ["尾静脉 (i.v.)", "腹腔 (i.p.)", "肌肉 (i.m.)", "皮下 (s.c.)", "雾化"],
+    multi: true,
     placeholder: "其他途径",
   },
   {
@@ -192,12 +211,14 @@ export const INVIVO_PARAM_PRESETS: ParamPreset[] = [
     id: "timepoint",
     label: "检测时间点",
     options: ["4 h", "5 h", "6 h", "8 h", "12 h", "24 h"],
+    multi: true,
     placeholder: "其他时间",
   },
   {
     id: "invivoReadout",
     label: "检测指标",
-    options: ["活体成像", "离体成像", "器官荧光分布", "血清 ELISA", "组织 qPCR"],
+    options: ["活体成像", "离体成像", "器官荧光分布", "ELISA", "qPCR"],
+    retired: ["血清 ELISA", "组织 qPCR", "IVIS 活体成像", "器官分布", "体重/存活"],
     multi: true,
     placeholder: "其他指标",
   },
@@ -293,13 +314,25 @@ export function mergeParamEntries(
     const hit = stored.find((s) => s.id === entry.id);
     if (!hit) return entry;
     seen.add(entry.id);
+    const value = typeof hit.value === "string" ? hit.value : "";
+    // Retired options stop being offered, but never when they *are* the
+    // recorded answer — a batch that ran on HeLa still has to read HeLa.
+    const answered = new Set(splitMulti(value).concat(value.trim()));
+    const retired = new Set(
+      (presets.find((p) => p.id === entry.id)?.retired ?? []).filter(
+        (o) => !answered.has(o)
+      )
+    );
     return {
       ...entry,
       // A renamed preset in code wins over the stored label — the stored one is
       // a snapshot of an older wording, not a user decision. `multi` likewise:
       // it is structural, decided by the preset bank, not by the saved blob.
-      value: typeof hit.value === "string" ? hit.value : "",
-      options: uniqueStrings([...entry.options, ...uniqueStrings(hit.options)]),
+      value,
+      options: uniqueStrings([
+        ...entry.options,
+        ...uniqueStrings(hit.options),
+      ]).filter((o) => !retired.has(o)),
     };
   });
 

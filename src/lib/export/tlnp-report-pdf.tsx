@@ -407,7 +407,6 @@ export function TlnpReportDocument({
     (c) => c.values.length > 0
   );
   const vitroUnit = invitroUnitLabel(d.assay.invitro.results);
-  const liverSpleen = liverSpleenRatio(d.assay.invivo.results.rows);
   const fmtDate = (iso: string) => {
     const x = new Date(iso);
     const p = (v: number) => String(v).padStart(2, "0");
@@ -765,53 +764,61 @@ export function TlnpReportDocument({
           </AssayArm>
 
           <AssayArm label="体内" design={d.assay.invivo.design}>
-            {d.assay.invivo.results.rows.length > 0 && (
-              <View style={styles.table}>
-                <Row
-                  head
-                  widths={["28%", "18%", "27%", "27%"]}
-                  cells={[
-                    "样本",
-                    "器官",
-                    "Total ROI (p/s)",
-                    "Avg ROI (p/s/cm²/sr)",
-                  ]}
-                />
-                {d.assay.invivo.results.rows.map((r) => (
-                  <Row
-                    key={r.id}
-                    widths={["28%", "18%", "27%", "27%"]}
-                    cells={[
-                      r.sample || "--",
-                      r.organ || "--",
-                      r.totalRoi || "--",
-                      r.avgRoi || "--",
-                    ]}
-                  />
-                ))}
+            {d.assay.invivo.results.runs.map((run, ri) => (
+              <View key={run.id} style={{ marginTop: 3 }}>
+                <Text style={{ fontSize: 8, fontWeight: 700 }}>
+                  {run.name || `成像结果 ${ri + 1}`}
+                  {run.note.trim() ? ` · ${run.note}` : ""}
+                </Text>
+                {run.rows.length > 0 && (
+                  <View style={styles.table}>
+                    <Row
+                      head
+                      widths={["28%", "18%", "27%", "27%"]}
+                      cells={[
+                        "样本",
+                        "器官",
+                        "Total ROI (p/s)",
+                        "Avg ROI (p/s/cm²/sr)",
+                      ]}
+                    />
+                    {run.rows.map((r) => (
+                      <Row
+                        key={r.id}
+                        widths={["28%", "18%", "27%", "27%"]}
+                        cells={[
+                          r.sample || "--",
+                          r.organ || "--",
+                          r.totalRoi || "--",
+                          r.avgRoi || "--",
+                        ]}
+                      />
+                    ))}
+                  </View>
+                )}
+                {liverSpleenRatio(run.rows).length > 0 && (
+                  <View style={styles.table}>
+                    <Row
+                      head
+                      widths={["40%", "20%", "20%", "20%"]}
+                      cells={["样本", "肝占比", "脾占比", "肝/脾"]}
+                    />
+                    {liverSpleenRatio(run.rows).map((b) => (
+                      <Row
+                        key={b.sample}
+                        widths={["40%", "20%", "20%", "20%"]}
+                        cells={[
+                          b.sample,
+                          b.liver.toFixed(2),
+                          b.spleen.toFixed(2),
+                          isFinite(b.ratio) ? b.ratio.toFixed(2) : "--",
+                        ]}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
-            )}
-            {liverSpleen.length > 0 && (
-              <View style={styles.table}>
-                <Row
-                  head
-                  widths={["40%", "20%", "20%", "20%"]}
-                  cells={["样本", "肝占比", "脾占比", "肝/脾"]}
-                />
-                {liverSpleen.map((b) => (
-                  <Row
-                    key={b.sample}
-                    widths={["40%", "20%", "20%", "20%"]}
-                    cells={[
-                      b.sample,
-                      b.liver.toFixed(2),
-                      b.spleen.toFixed(2),
-                      isFinite(b.ratio) ? b.ratio.toFixed(2) : "--",
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
+            ))}
             <Note label="结果分析" text={d.assay.invivo.results.discussion} />
           </AssayArm>
         </Section>

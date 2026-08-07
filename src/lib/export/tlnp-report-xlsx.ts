@@ -341,36 +341,51 @@ function invitroRows(d: TlnpExperimentData): Cell[][] {
   return rows;
 }
 
-/** 体内: the ROI rows plus the liver/spleen share the third chart draws. */
+/**
+ * 体内: one block per imaging run — its ROI rows, then the liver/spleen share
+ * the third chart draws.
+ *
+ * Runs stay separate rather than being concatenated: 6 h and 24 h are different
+ * figures, and pooling them would put two samples of the same name in one
+ * table with no way to tell which imaging session each came from.
+ */
 function invivoRows(d: TlnpExperimentData): Cell[][] {
   const r = d.assay.invivo.results;
   const rows: Cell[][] = assayDesignRows("体内", d.assay.invivo.design);
   rows.push([]);
-  if (r.rows.length === 0) return [...rows, ["（还没有体内结果）"]];
+  if (r.runs.length === 0) return [...rows, ["（还没有体内结果）"]];
 
-  rows.push([
-    "样本",
-    "器官",
-    "Total ROI — Total Flux (p/s)",
-    "Avg ROI — Avg Radiance (p/s/cm²/sr)",
-  ]);
-  for (const row of r.rows) {
-    rows.push([row.sample, row.organ, row.totalRoi, row.avgRoi]);
-  }
-
-  const ratio = liverSpleenRatio(r.rows);
-  if (ratio.length > 0) {
-    rows.push([]);
-    rows.push(["样本", "肝占比", "脾占比", "肝/脾 (Avg ROI)"]);
-    for (const b of ratio) {
-      rows.push([
-        b.sample,
-        n2(b.liver),
-        n2(b.spleen),
-        isFinite(b.ratio) ? n2(b.ratio) : "",
-      ]);
+  r.runs.forEach((run, i) => {
+    rows.push([run.name || `成像结果 ${i + 1}`, run.note]);
+    if (run.rows.length === 0) {
+      rows.push(["（这组还没有数据）"], []);
+      return;
     }
-  }
+    rows.push([
+      "样本",
+      "器官",
+      "Total ROI — Total Flux (p/s)",
+      "Avg ROI — Avg Radiance (p/s/cm²/sr)",
+    ]);
+    for (const row of run.rows) {
+      rows.push([row.sample, row.organ, row.totalRoi, row.avgRoi]);
+    }
+
+    const ratio = liverSpleenRatio(run.rows);
+    if (ratio.length > 0) {
+      rows.push([]);
+      rows.push(["样本", "肝占比", "脾占比", "肝/脾 (Avg ROI)"]);
+      for (const b of ratio) {
+        rows.push([
+          b.sample,
+          n2(b.liver),
+          n2(b.spleen),
+          isFinite(b.ratio) ? n2(b.ratio) : "",
+        ]);
+      }
+    }
+    rows.push([]);
+  });
   return rows;
 }
 

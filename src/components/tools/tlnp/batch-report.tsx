@@ -444,14 +444,20 @@ function AssaySection({ data }: { data: TlnpExperimentData }) {
     () => summarizeInVitro(vitro.results),
     [vitro.results]
   );
-  const grouped = useMemo(() => groupRoi(vivo.results.rows), [vivo.results.rows]);
-  const ratio = useMemo(
-    () => liverSpleenRatio(vivo.results.rows),
-    [vivo.results.rows]
+  const runs = useMemo(
+    () =>
+      vivo.results.runs
+        .filter((r) => r.rows.length > 0)
+        .map((r) => ({
+          run: r,
+          grouped: groupRoi(r.rows),
+          ratio: liverSpleenRatio(r.rows),
+        })),
+    [vivo.results.runs]
   );
 
   const hasVitro = stats.some((s) => s.mean !== null);
-  const hasVivo = vivo.results.rows.length > 0;
+  const hasVivo = runs.length > 0;
   const vitroDesign = vitro.design.params.some((p) => p.value.trim() !== "");
   const vivoDesign = vivo.design.params.some((p) => p.value.trim() !== "");
   if (!hasVitro && !hasVivo && !vitroDesign && !vivoDesign) return null;
@@ -498,23 +504,29 @@ function AssaySection({ data }: { data: TlnpExperimentData }) {
               )}
             </p>
             <ParamGrid design={vivo.design} />
-            {hasVivo && (
-              <div className="grid gap-3 lg:grid-cols-3">
-                <GroupedBarChart
-                  samples={grouped.samples}
-                  series={grouped.total}
-                  unit="Total Flux (p/s)"
-                  title="Total ROI"
-                />
-                <GroupedBarChart
-                  samples={grouped.samples}
-                  series={grouped.avg}
-                  unit="Avg Radiance (p/s/cm²/sr)"
-                  title="Avg ROI"
-                />
-                <LiverSpleenChart bars={ratio} />
+            {runs.map(({ run, grouped, ratio }) => (
+              <div key={run.id} className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {run.name}
+                  {run.note.trim() && ` · ${run.note}`}
+                </p>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <GroupedBarChart
+                    samples={grouped.samples}
+                    series={grouped.total}
+                    unit="Total Flux (p/s)"
+                    title="Total ROI"
+                  />
+                  <GroupedBarChart
+                    samples={grouped.samples}
+                    series={grouped.avg}
+                    unit="Avg Radiance (p/s/cm²/sr)"
+                    title="Avg ROI"
+                  />
+                  <LiverSpleenChart bars={ratio} />
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
       </CardContent>

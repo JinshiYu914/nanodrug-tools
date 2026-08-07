@@ -138,8 +138,11 @@ export default function DosingBoxes({ systems, proteins, onChange }: Props) {
               </div>
             </div>
 
+            {/* Collapsed by default: the derivation is there to be checked
+                when a number looks wrong, not read on every glance at a
+                screen that already has one box per system. */}
             {steps.length > 0 && (
-              <details className="border-t pt-2 text-[11px]" open>
+              <details className="border-t pt-2 text-[11px]">
                 <summary className="cursor-pointer select-none text-muted-foreground">
                   计算过程
                 </summary>

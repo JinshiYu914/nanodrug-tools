@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import { Microscope, MessageSquare, Mouse } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Microscope, MessageSquare, Mouse, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,18 +16,11 @@ import Chip from "./chip";
 import ModuleDate from "./module-date";
 import ParamBench from "./param-bench";
 import InVitroMatrix from "./invitro-matrix";
-import {
-  GroupedBarChart,
-  LiverSpleenChart,
-  SampleBarChart,
-} from "./assay-charts";
+import RoiRunCard from "./roi-run-card";
+import { SampleBarChart } from "./assay-charts";
 import { systemName } from "@/lib/calculations/tlnp-conjugation";
 import {
-  groupRoi,
-  liverSpleenRatio,
-  parseRoiTable,
-} from "@/lib/calculations/tlnp-roi";
-import {
+  createRoiRun,
   FLUORESCENCE_METRIC_LABELS,
   INVITRO_READOUT_LABELS,
   invitroUnitLabel,
@@ -293,10 +287,6 @@ function InVitroResultsCard({
 
 // ─── 体内结果 ─────────────────────────────────────────────
 
-const ROI_EXAMPLE = `tLNP-1\tliver\t2.31e8\t4.52e6
-tLNP-1\tspleen\t8.40e7\t1.63e6
-tLNP-1\tlung\t1.12e7\t3.10e5`;
-
 function InVivoResultsCard({
   results,
   onChange,
@@ -304,9 +294,15 @@ function InVivoResultsCard({
   results: InVivoResults;
   onChange: (next: InVivoResults) => void;
 }) {
-  const parsed = useMemo(() => parseRoiTable(results.rawText), [results.rawText]);
-  const grouped = useMemo(() => groupRoi(results.rows), [results.rows]);
-  const ratio = useMemo(() => liverSpleenRatio(results.rows), [results.rows]);
+  // Which run was just created, so its card opens on the paste box instead of
+  // on an empty chart the user would have to find the pencil for.
+  const [freshId, setFreshId] = useState<string | null>(null);
+
+  function addRun() {
+    const run = createRoiRun(`成像结果 ${results.runs.length + 1}`, "", []);
+    setFreshId(run.id);
+    onChange({ ...results, runs: [...results.runs, run] });
+  }
 
   return (
     <>
@@ -314,62 +310,53 @@ function InVivoResultsCard({
         <CardHeader>
           <CardTitle className="text-base">体内结果</CardTitle>
           <CardDescription>
-            粘贴四列：样本名 / 器官 / Total ROI / Avg ROI。自动出三张图。
+            一次成像一组：粘贴 样本名 / 器官 / Total ROI / Avg ROI
+            四列，保存后自动出三张图，原始数据收起来，点铅笔可再编辑。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">
-              成像数据（可直接从 Excel 或成像软件复制）
-            </Label>
-            {/* max-h + overflow keeps a 60-row paste inside its own scrollbar.
-                shadcn's Textarea is field-sizing-content, so without a ceiling
-                the box grows to the full paste and takes over the page. */}
-            <Textarea
-              value={results.rawText}
-              onChange={(e) => {
-                const rawText = e.target.value;
+          {results.runs.map((run) => (
+            <RoiRunCard
+              key={run.id}
+              run={run}
+              startEditing={run.id === freshId}
+              onChange={(next) =>
                 onChange({
                   ...results,
-                  rawText,
-                  rows: parseRoiTable(rawText).rows,
+                  runs: results.runs.map((r) => (r.id === next.id ? next : r)),
+                })
+              }
+              onRemove={() => {
+                if (!confirm(`删除成像结果「${run.name || "未命名"}」？`)) return;
+                onChange({
+                  ...results,
+                  runs: results.runs.filter((r) => r.id !== run.id),
                 });
               }}
-              placeholder={ROI_EXAMPLE}
-              spellCheck={false}
-              className="max-h-64 min-h-32 overflow-y-auto font-mono text-xs"
             />
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="text-muted-foreground">
-                已读取 {results.rows.length} 行 · {grouped.samples.length} 个样本 ·{" "}
-                {grouped.organs.length} 个器官
-              </span>
-              {parsed.warnings.map((w) => (
-                <span
-                  key={w}
-                  className="rounded border border-warning/35 bg-warning-subtle px-1.5 py-0.5 text-warning"
-                >
-                  {w}
-                </span>
-              ))}
-            </div>
-          </div>
+          ))}
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <GroupedBarChart
-              samples={grouped.samples}
-              series={grouped.total}
-              unit="Total Flux (p/s)"
-              title="Total ROI"
-            />
-            <GroupedBarChart
-              samples={grouped.samples}
-              series={grouped.avg}
-              unit="Avg Radiance (p/s/cm²/sr)"
-              title="Avg ROI"
-            />
-            <LiverSpleenChart bars={ratio} />
-          </div>
+          {results.runs.length === 0 ? (
+            <div className="space-y-3 rounded-lg border border-dashed py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                还没有成像结果。一个时间点、一次在体或离体成像各建一组。
+              </p>
+              <Button size="sm" className="gap-1.5" onClick={addRun}>
+                <Plus className="h-3.5 w-3.5" />
+                新建成像结果
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={addRun}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              再加一组成像结果
+            </Button>
+          )}
         </CardContent>
       </Card>
 
