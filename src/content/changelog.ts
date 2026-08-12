@@ -28,6 +28,43 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.0.0",
+    date: "2026-08-12",
+    title: "IVT mRNA 工作台与 RNA 库",
+    summary:
+      "从质粒线性化到表达验证，按批次记录多条 RNA；常用方法可保存为模板，全部 RNA 自动汇入个人 RNA 库。",
+    changes: [
+      {
+        kind: "feature",
+        text: "新增 IVT mRNA 工作台（需登录）：批次支持新建、复制、重命名、文件夹整理和自动保存，一个批次可记录多条 RNA，并可把实验方法复制到其他 RNA。",
+      },
+      {
+        kind: "feature",
+        text: "RNA 选择提供常用 RNA 与 T7 质粒载体，可自定义；样本序号默认按日期自动生成。",
+      },
+      {
+        kind: "feature",
+        text: "质粒线性化默认使用 50 µL 固定体系：输入 DNA 浓度和质量后自动计算加样体积与补水量，体系数可直接在列标题中调整并自动换算总用量。",
+      },
+      {
+        kind: "feature",
+        text: "IVT 反应提供 20 µL 默认加样体系，记录试剂盒、核苷修饰与加帽方式；A / U / G / C / Cap / Buffer / T7 Enzyme、模板 DNA 和水均可按体系数自动换算。",
+      },
+      {
+        kind: "feature",
+        text: "线性化、IVT 与 RNA 纯化方法均可保存为个人模板并在其他批次直接调用；模板以快照写入批次，不会因后续修改而改写历史记录。",
+      },
+      {
+        kind: "feature",
+        text: "新增个人 RNA 库：自动汇总所有 IVT 批次，支持按名称、RNA、载体、日期和状态筛选，并可导出包含完整方法、得量和表达验证的 Excel。",
+      },
+      {
+        kind: "improvement",
+        text: "RNA 浓度与终体积自动换算总得量；旧版或异常批次数据采用兼容解析，避免因缺失字段导致页面崩溃。",
+      },
+    ],
+  },
+  {
     version: "v0.9.0",
     date: "2026-08-07",
     title: "tLNP 制备工作台",

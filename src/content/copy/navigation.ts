@@ -55,6 +55,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
         label: "tLNP Workbench",
         blurb: "Record a targeted-LNP batch end to end, then compare batches.",
       },
+      {
+        href: "/tools/ivt",
+        label: "IVT mRNA Workbench",
+        blurb:
+          "Record IVT batches and maintain a searchable RNA library.",
+      },
     ],
   },
   {
@@ -107,6 +113,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
       { href: "/tools", label: "Lab Tools" },
       { href: "/tools/lnp-formula", label: "LNP Calculator" },
       { href: "/tools/tlnp", label: "tLNP Workbench" },
+      { href: "/tools/ivt", label: "IVT mRNA Workbench" },
       { href: "/assistant", label: "AI Assistant" },
     ],
   },

@@ -8,7 +8,9 @@ export type LnpItemType =
   | "ribogreen_result"
   | "tlnp_experiment"
   | "protein"
-  | "cl4b_preset";
+  | "cl4b_preset"
+  | "ivt_batch"
+  | "ivt_template";
 
 export interface LnpSavedItem {
   id: string;
