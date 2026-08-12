@@ -23,6 +23,8 @@ export interface LnpSavedItem {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** Server-maintained revision of `data`; migration 008. */
+  data_revision: number;
 }
 
 export interface TreeNode extends LnpSavedItem {
@@ -88,16 +90,42 @@ export async function renameItem(id: string, name: string): Promise<void> {
   if (error) throw error;
 }
 
+export class DataSyncConflictError extends Error {
+  readonly current: LnpSavedItem | null;
+
+  constructor(current: LnpSavedItem | null) {
+    super(current ? "Cloud record has a newer data revision" : "Cloud record was deleted");
+    this.name = "DataSyncConflictError";
+    this.current = current;
+  }
+}
+
+/**
+ * Replace a row's JSON payload.
+ *
+ * Workbenches pass `expectedRevision` so Postgres performs an atomic
+ * compare-and-swap. Explicit-save legacy callers may omit it; they never
+ * autosave a stale in-memory document and are outside the workbench sync scope.
+ */
 export async function updateItemData(
   id: string,
-  data: Record<string, unknown>
-): Promise<void> {
+  data: Record<string, unknown>,
+  expectedRevision?: number
+): Promise<LnpSavedItem> {
   const supabase = createClient();
-  const { error } = await supabase
+  let query = supabase
     .from("lnp_saved_items")
-    .update({ data, updated_at: new Date().toISOString() })
+    .update({ data })
     .eq("id", id);
+  if (expectedRevision !== undefined) {
+    query = query.eq("data_revision", expectedRevision);
+  }
+  const { data: row, error } = await query.select("*").maybeSingle();
   if (error) throw error;
+  if (!row) {
+    throw new DataSyncConflictError(await getItem(id));
+  }
+  return row as LnpSavedItem;
 }
 
 export async function deleteItem(id: string): Promise<void> {

@@ -4,13 +4,11 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  Clock,
   Dna,
   Library,
   Loader2,
   LogIn,
   Plus,
-  Save,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,12 +19,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/lib/supabase/use-user";
 import { type LnpSavedItem } from "@/lib/supabase/lnp-service";
-import { listIvtBatches } from "@/lib/supabase/ivt-service";
+import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
 import {
   copyRnaMethod,
   createSampleNumber,
   emptyIvtRna,
-  parseIvtBatch,
   rnaLibraryStatus,
   rnaTotalMassUg,
   type IvtRnaRecord,
@@ -35,6 +32,8 @@ import IvtBatchSidebar from "./batch-sidebar";
 import RnaEditor from "./rna-editor";
 import RnaLibraryView from "./rna-library";
 import { useIvtBatch } from "./use-ivt-batch";
+import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
+import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 
 type ViewKey = "batch" | "library";
 
@@ -49,7 +48,7 @@ export default function IvtWorkbench() {
   const rnaParam = searchParams.get("rna");
   const restoreAttempted = useRef<string | null>(null);
 
-  const { batch, data, update, select, clear, saving, lastSavedAt, refreshToken } = useIvtBatch();
+  const { batch, data, update, select, clear, lastSavedAt, refreshToken, syncState } = useIvtBatch(user?.id ?? null);
 
   const writeUrl = useCallback(
     (next: { view?: ViewKey; batchId?: string | null; rnaId?: string | null }) => {
@@ -70,7 +69,7 @@ export default function IvtWorkbench() {
     let cancelled = false;
     void (async () => {
       try {
-        const rows = await listIvtBatches();
+        const rows = await listSyncedWorkbenchItems(user!.id, "ivt_batch");
         if (cancelled) return;
         const match = rows.find((item) => item.id === batchParam && !item.is_folder);
         if (match) select(match);
@@ -83,7 +82,7 @@ export default function IvtWorkbench() {
       cancelled = true;
       if (restoreAttempted.current === batchParam) restoreAttempted.current = null;
     };
-  }, [authed, batch?.id, batchParam, select]);
+  }, [authed, batch?.id, batchParam, select, user]);
 
   const activeRna = useMemo(
     () => data.rnas.find((rna) => rna.id === rnaParam) ?? data.rnas[0] ?? null,
@@ -94,8 +93,7 @@ export default function IvtWorkbench() {
     (item: LnpSavedItem) => {
       restoreAttempted.current = item.id;
       select(item);
-      const first = parseIvtBatch(item.data).rnas[0]?.id ?? null;
-      writeUrl({ view: "batch", batchId: item.id, rnaId: first });
+      writeUrl({ view: "batch", batchId: item.id, rnaId: null });
     },
     [select, writeUrl]
   );
@@ -154,6 +152,7 @@ export default function IvtWorkbench() {
       </Shell>
     );
   }
+  if (!user) return null;
 
   return (
     <Shell>
@@ -162,7 +161,7 @@ export default function IvtWorkbench() {
         <ViewButton active={view === "library"} icon={<Library className="h-3.5 w-3.5" />} label="我的 RNA 库" onClick={() => writeUrl({ view: "library" })} />
       </div>
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        <aside><IvtBatchSidebar activeBatchId={batch?.id ?? null} onSelectBatch={handleSelectBatch} onBatchDeleted={deleteBatch} refreshToken={refreshToken} /></aside>
+        <aside><IvtBatchSidebar userId={user!.id} activeBatchId={batch?.id ?? null} onSelectBatch={handleSelectBatch} onBatchDeleted={deleteBatch} refreshToken={refreshToken} /></aside>
         <main className="min-w-0">
           {view === "library" ? (
             <RnaLibraryView refreshToken={refreshToken} />
@@ -170,7 +169,7 @@ export default function IvtWorkbench() {
             <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Dna className="h-4 w-4 text-primary" />新建或选择一个 IVT 批次</CardTitle><CardDescription>一个批次可包含多条 RNA，每条 RNA 可以使用不同方法。</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">使用左侧 <Plus className="inline h-3.5 w-3.5" /> 新建批次，或打开已有批次继续记录。</p></CardContent></Card>
           ) : (
             <div className="space-y-5">
-              <BatchHeader batchName={batch.name} data={data} update={update} saving={saving} lastSavedAt={lastSavedAt} />
+              <BatchHeader batchName={batch.name} data={data} update={update} lastSavedAt={lastSavedAt} syncState={syncState} />
               <RnaStrip rnas={data.rnas} activeRnaId={activeRna?.id ?? null} onSelect={(id) => writeUrl({ rnaId: id })} onAdd={addRna} onDelete={removeRna} />
               {activeRna ? (
                 <RnaEditor rna={activeRna} allRnas={data.rnas} onChange={updateRna} onCopyMethod={copyMethod} />
@@ -185,11 +184,11 @@ export default function IvtWorkbench() {
   );
 }
 
-function BatchHeader({ batchName, data, update, saving, lastSavedAt }: { batchName: string; data: ReturnType<typeof useIvtBatch>["data"]; update: ReturnType<typeof useIvtBatch>["update"]; saving: boolean; lastSavedAt: Date | null }) {
+function BatchHeader({ batchName, data, update, lastSavedAt, syncState }: { batchName: string; data: ReturnType<typeof useIvtBatch>["data"]; update: ReturnType<typeof useIvtBatch>["update"]; lastSavedAt: Date | null; syncState: WorkbenchSyncState }) {
   const setMeta = (patch: Partial<typeof data.meta>) => update((previous) => ({ ...previous, meta: { ...previous.meta, ...patch } }));
   return (
     <Card><CardContent className="space-y-4 py-4">
-      <div><h2 className="font-semibold">{batchName}</h2><div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">{saving ? <span className="flex items-center gap-1 text-primary"><Loader2 className="h-3 w-3 animate-spin" />保存中</span> : lastSavedAt ? <span className="flex items-center gap-1 text-success"><Save className="h-3 w-3" />已保存 {lastSavedAt.toLocaleTimeString()}</span> : <span className="flex items-center gap-1"><Clock className="h-3 w-3" />等待编辑</span>}<span>{data.rnas.length} 条 RNA</span></div></div>
+      <div><h2 className="font-semibold">{batchName}</h2><div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground"><WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} /><span>{data.rnas.length} 条 RNA</span></div></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="批次编号"><Input className="h-8 text-xs" value={data.meta.batchCode} onChange={(event) => setMeta({ batchCode: event.target.value })} placeholder="IVT-0812-A" /></Field><Field label="实验日期"><Input type="date" className="h-8 text-xs" value={data.meta.date} onChange={(event) => setMeta({ date: event.target.value })} /></Field><Field label="负责人"><Input className="h-8 text-xs" value={data.meta.operator} onChange={(event) => setMeta({ operator: event.target.value })} /></Field><Field label="实验目的"><Input className="h-8 text-xs" value={data.meta.objective} onChange={(event) => setMeta({ objective: event.target.value })} /></Field></div>
       <Field label="批次备注"><Textarea rows={2} value={data.meta.note} onChange={(event) => setMeta({ note: event.target.value })} /></Field>
     </CardContent></Card>

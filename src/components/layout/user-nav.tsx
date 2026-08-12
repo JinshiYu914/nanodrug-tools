@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/supabase/use-user";
+import { clearWorkbenchCacheForUser } from "@/lib/supabase/workbench-cache";
 
 export function UserNav() {
   const router = useRouter();
@@ -40,8 +41,12 @@ export function UserNav() {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+  const userId = user.id;
 
   async function handleLogout() {
+    await clearWorkbenchCacheForUser(userId).catch((error) =>
+      console.warn("[auth] 清理工作台本机缓存失败", error)
+    );
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();

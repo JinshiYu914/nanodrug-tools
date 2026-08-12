@@ -105,6 +105,17 @@ export default function BatchCompare({ activeBatchId }: Props) {
     { label: "纯化方式", get: (r) => r.summary.purificationLabel },
     { label: "样品数", get: (r) => String(r.summary.sampleCount) },
     { label: "抗体数", get: (r) => String(r.summary.proteinCount) },
+    {
+      label: "抗体信息",
+      get: (r) =>
+        r.data.conjugation.proteins
+          .map((p, i) =>
+            [p.name || `抗体 ${i + 1}`, p.source, p.expressionSystem, p.expressionDate]
+              .filter(Boolean)
+              .join(" / ")
+          )
+          .join("；"),
+    },
     { label: "反应体系数", get: (r) => String(r.summary.systemCount) },
     { label: "平均粒径 (nm)", get: (r) => n(r.summary.meanSize_nm) },
     { label: "平均 PDI", get: (r) => n(r.summary.meanPdi, 3) },

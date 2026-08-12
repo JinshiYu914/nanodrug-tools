@@ -28,6 +28,31 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.1.0",
+    date: "2026-08-12",
+    title: "工作台访客体验与多设备同步保护",
+    summary:
+      "未登录也能完整体验 tLNP 示例；实验工作台改为云端优先、离线草稿和版本化同步，避免旧设备覆盖新数据。",
+    changes: [
+      {
+        kind: "feature",
+        text: "tLNP 工作台向访客开放一份可编辑、可查看图表并可导出 PDF / Excel 的完整虚构示例；示例不读取或保存任何用户数据，刷新即重置。",
+      },
+      {
+        kind: "feature",
+        text: "偶联抗体新增来源、表达载体、表达日期和备注，并同步进入抗体库、总览、PDF、Excel与跨批次对比。",
+      },
+      {
+        kind: "fix",
+        text: "tLNP、IVT mRNA 与配方筛选改为先读取云端最新版再允许自动保存；本机离线修改保存为草稿，真正冲突时自动保留为副本而不覆盖云端。",
+      },
+      {
+        kind: "improvement",
+        text: "新增同步状态提示和跨设备实时刷新；部署前需在 Supabase 手动执行 008_workbench_sync_safety.sql。",
+      },
+    ],
+  },
+  {
     version: "v1.0.0",
     date: "2026-08-12",
     title: "IVT mRNA 工作台与 RNA 库",

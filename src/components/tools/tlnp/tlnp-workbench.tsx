@@ -7,10 +7,8 @@ import {
   Boxes,
   Clock,
   FileText,
-  Loader2,
   LogIn,
   Plus,
-  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,13 +24,14 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "@/lib/supabase/use-user";
 import {
   getItem,
-  listAllItems,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
+import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
 import {
   createSystemCharacterization,
   moduleFilled,
 } from "@/lib/calculations/tlnp-experiment";
+import { createTlnpDemoExperiment } from "@/lib/calculations/tlnp-demo";
 import { extractLink } from "./use-ribogreen-link";
 import BatchSidebar from "./batch-sidebar";
 import ModuleNav, { type ModuleKey } from "./module-nav";
@@ -43,6 +42,8 @@ import ModuleAssay from "./module-assay";
 import BatchReport from "./batch-report";
 import BatchCompare from "./batch-compare";
 import { useTlnpBatch } from "./use-tlnp-batch";
+import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
+import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
 
@@ -61,16 +62,36 @@ export default function TlnpWorkbench() {
   const batchParam = searchParams.get("batch");
   const moduleParam = parseModule(searchParams.get("m"));
 
-  const {
-    batch,
-    data,
-    update,
-    select,
-    clear,
-    saving,
-    lastSavedAt,
-    refreshToken,
-  } = useTlnpBatch();
+  const cloud = useTlnpBatch(user?.id ?? null);
+  const [demoData, setDemoData] = useState(createTlnpDemoExperiment);
+  const guest = authed === false;
+  const demoBatch = useMemo<LnpSavedItem>(
+    () => ({
+      id: "tlnp-public-demo",
+      user_id: "guest",
+      type: "tlnp_experiment",
+      is_folder: false,
+      parent_id: null,
+      name: "anti-CD3 tLNP 完整示例（虚构数据）",
+      data: null,
+      sort_order: 0,
+      created_at: "2026-08-01T09:00:00+08:00",
+      updated_at: "2026-08-06T18:00:00+08:00",
+      data_revision: 1,
+    }),
+    []
+  );
+  const batch = guest ? demoBatch : cloud.batch;
+  const data = guest ? demoData : cloud.data;
+  const cloudUpdate = cloud.update;
+  const update = useCallback(
+    (updater: (previous: typeof demoData) => typeof demoData) => {
+      if (guest) setDemoData(updater);
+      else cloudUpdate(updater);
+    },
+    [cloudUpdate, guest]
+  );
+  const { select, clear, lastSavedAt, refreshToken, syncState } = cloud;
 
   // The URL is the source of truth for which batch is open, so a link from the
   // RiboGreen grid — or a refresh — lands on the right one.
@@ -87,7 +108,7 @@ export default function TlnpWorkbench() {
     setRestoring(true);
     void (async () => {
       try {
-        const rows = await listAllItems("tlnp_experiment");
+        const rows = await listSyncedWorkbenchItems(user!.id, "tlnp_experiment");
         if (cancelled) return;
         const hit = rows.find((r) => r.id === batchParam && !r.is_folder);
         if (hit) select(hit);
@@ -109,7 +130,7 @@ export default function TlnpWorkbench() {
       // with ?batch= already in the URL.
       if (restoreAttempted.current === batchParam) restoreAttempted.current = null;
     };
-  }, [authed, batchParam, batch?.id, select]);
+  }, [authed, batchParam, batch?.id, select, user]);
 
   const writeUrl = useCallback(
     (batchId: string | null, module: ModuleKey) => {
@@ -231,8 +252,8 @@ export default function TlnpWorkbench() {
   );
 
   const handleModuleChange = useCallback(
-    (key: ModuleKey) => writeUrl(batch?.id ?? null, key),
-    [writeUrl, batch?.id]
+    (key: ModuleKey) => writeUrl(guest ? null : batch?.id ?? null, key),
+    [writeUrl, batch?.id, guest]
   );
 
   const filled = useMemo(
@@ -257,43 +278,30 @@ export default function TlnpWorkbench() {
     );
   }
 
-  if (!authed) {
-    return (
-      <Shell>
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <LogIn className="h-5 w-5 text-primary" />
-              <CardTitle>tLNP 工作台需要登录</CardTitle>
-            </div>
-            <CardDescription>
-              登录后可新建实验批次，记录从 LNP 制备到体内外实验的完整流程，并导出
-              PDF / Excel。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/login">
-              <Button className="gap-2">
-                <LogIn className="h-4 w-4" />
-                前往登录
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </Shell>
-    );
-  }
-
   return (
     <Shell>
+      {guest && (
+        <div className="mb-5 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <p className="font-medium">当前为可编辑的虚构示例数据，不代表实验建议</p>
+          <p className="mt-1 text-xs text-muted-foreground">你可以修改四个模块、查看图表并导出报告；所有修改只存在于当前页面，刷新后会重置。</p>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <aside>
-          <BatchSidebar
-            activeBatchId={batch?.id ?? null}
-            onSelectBatch={handleSelectBatch}
-            onBatchDeleted={handleBatchDeleted}
-            refreshToken={refreshToken}
-          />
+          {guest ? (
+            <Card className="lg:sticky lg:top-20">
+              <CardHeader><CardTitle className="text-sm">体验示例</CardTitle><CardDescription>登录后才能新建、保存和跨设备同步自己的实验。</CardDescription></CardHeader>
+              <CardContent className="space-y-2"><Link href="/login"><Button className="w-full gap-2"><LogIn className="h-4 w-4" />登录后新建实验</Button></Link><p className="text-center text-[11px] text-muted-foreground">刷新页面不会保存本次修改</p></CardContent>
+            </Card>
+          ) : (
+            <BatchSidebar
+              userId={user!.id}
+              activeBatchId={batch?.id ?? null}
+              onSelectBatch={handleSelectBatch}
+              onBatchDeleted={handleBatchDeleted}
+              refreshToken={refreshToken}
+            />
+          )}
         </aside>
 
         <div className="min-w-0 space-y-6">
@@ -328,8 +336,9 @@ export default function TlnpWorkbench() {
                 batch={batch}
                 data={data}
                 update={update}
-                saving={saving}
                 lastSavedAt={lastSavedAt}
+                syncState={syncState}
+                demo={guest}
                 activeModule={moduleParam}
                 onModuleChange={handleModuleChange}
               />
@@ -348,14 +357,16 @@ export default function TlnpWorkbench() {
                   batchName={batch.name}
                   createdAt={batch.created_at}
                   updatedAt={batch.updated_at}
+                  cloudEnabled={!guest}
                 />
               ) : moduleParam === "2" ? (
-                <ModuleConjugation data={data} update={update} />
+                <ModuleConjugation data={data} update={update} cloudEnabled={!guest} />
               ) : moduleParam === "3" ? (
                 <ModulePurification
                   data={data}
                   update={update}
                   batchId={batch.id}
+                  cloudEnabled={!guest}
                 />
               ) : moduleParam === "4" ? (
                 <ModuleAssay data={data} update={update} />
@@ -366,6 +377,8 @@ export default function TlnpWorkbench() {
                   updatedAt={batch.updated_at}
                   data={data}
                 />
+              ) : guest ? (
+                <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><LogIn className="h-4 w-4 text-primary" />跨批次对比需要登录</CardTitle><CardDescription>示例模式只有一个临时批次，不会读取任何用户云端记录。</CardDescription></CardHeader><CardContent><Link href="/login"><Button>前往登录</Button></Link></CardContent></Card>
               ) : (
                 <BatchCompare activeBatchId={batch.id} />
               )}
@@ -413,16 +426,18 @@ function BatchHeader({
   batch,
   data,
   update,
-  saving,
   lastSavedAt,
+  syncState,
+  demo,
   activeModule,
   onModuleChange,
 }: {
   batch: LnpSavedItem;
   data: ReturnType<typeof useTlnpBatch>["data"];
   update: ReturnType<typeof useTlnpBatch>["update"];
-  saving: boolean;
   lastSavedAt: Date | null;
+  syncState: WorkbenchSyncState;
+  demo: boolean;
   activeModule: ModuleKey;
   onModuleChange: (key: ModuleKey) => void;
 }) {
@@ -448,12 +463,16 @@ function BatchHeader({
               icon={<FileText className="h-3.5 w-3.5" />}
               label="总览与导出"
             />
-            <HeaderTab
-              active={activeModule === "compare"}
-              onClick={() => onModuleChange("compare")}
-              icon={<Boxes className="h-3.5 w-3.5" />}
-              label="批次对比"
-            />
+            {demo ? (
+              <Link href="/login"><Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"><LogIn className="h-3.5 w-3.5" />登录后新建实验</Button></Link>
+            ) : (
+              <HeaderTab
+                active={activeModule === "compare"}
+                onClick={() => onModuleChange("compare")}
+                icon={<Boxes className="h-3.5 w-3.5" />}
+                label="批次对比"
+              />
+            )}
           </div>
         </div>
 
@@ -462,17 +481,7 @@ function BatchHeader({
             <Clock className="h-3 w-3" />
             创建 {formatDateTime(batch.created_at)}
           </span>
-          {saving ? (
-            <span className="flex items-center gap-1 text-primary">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              保存中
-            </span>
-          ) : lastSavedAt ? (
-            <span className="flex items-center gap-1 text-success">
-              <Save className="h-3 w-3" />
-              已保存 {formatTime(lastSavedAt)}
-            </span>
-          ) : null}
+          {demo ? <span>示例修改仅保留到刷新前</span> : <WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} />}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -560,9 +569,4 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function formatTime(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }

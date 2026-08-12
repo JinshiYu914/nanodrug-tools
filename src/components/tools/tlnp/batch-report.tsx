@@ -256,7 +256,7 @@ export default function BatchReport({
         </Card>
       )}
 
-      {systems.length > 0 && (
+      {(systems.length > 0 || data.conjugation.proteins.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">偶联反应</CardTitle>
@@ -264,8 +264,16 @@ export default function BatchReport({
               {systems.length} 个反应体系 · {data.conjugation.proteins.length} 个抗体
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto rounded-lg border">
+          <CardContent className="space-y-4">
+            {data.conjugation.proteins.length > 0 && (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[48rem] border-collapse text-xs">
+                  <thead><tr className="border-b bg-muted/40"><th className="px-2 py-2 text-left font-medium">抗体</th><th className="px-2 py-2 text-left font-medium">来源</th><th className="px-2 py-2 text-left font-medium">表达载体</th><th className="px-2 py-2 text-left font-medium">表达日期</th><th className="px-2 py-2 text-left font-medium">浓度</th><th className="px-2 py-2 text-left font-medium">备注</th></tr></thead>
+                  <tbody>{data.conjugation.proteins.map((protein, index) => <tr key={protein.id} className="border-b last:border-b-0"><td className="px-2 py-1.5">{proteinName(protein, index)}</td><td className="px-2 py-1.5">{protein.source || "--"}</td><td className="px-2 py-1.5">{protein.expressionSystem || "--"}</td><td className="px-2 py-1.5 font-mono">{protein.expressionDate || "--"}</td><td className="px-2 py-1.5 font-mono">{protein.conc ? `${protein.conc} ${protein.concUnit === "uM" ? "µM" : "mg/mL"}` : "--"}</td><td className="px-2 py-1.5 text-muted-foreground">{protein.note || "--"}</td></tr>)}</tbody>
+                </table>
+              </div>
+            )}
+            {systems.length > 0 && <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[62rem] border-collapse text-xs">
                 <thead>
                   <tr className="border-b bg-muted/40">
@@ -334,7 +342,7 @@ export default function BatchReport({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </CardContent>
         </Card>
       )}

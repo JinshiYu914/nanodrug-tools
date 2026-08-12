@@ -508,15 +508,18 @@ export function TlnpReportDocument({
             <View style={styles.table}>
               <Row
                 head
-                widths={["34%", "22%", "22%", "22%"]}
-                cells={["抗体", "分子量 (Da)", "浓度", "备注"]}
+                widths={["18%", "12%", "12%", "14%", "13%", "15%", "16%"]}
+                cells={["抗体", "来源", "表达载体", "表达日期", "分子量", "浓度", "备注"]}
               />
               {d.conjugation.proteins.map((p, i) => (
                 <Row
                   key={p.id}
-                  widths={["34%", "22%", "22%", "22%"]}
+                  widths={["18%", "12%", "12%", "14%", "13%", "15%", "16%"]}
                   cells={[
                     proteinName(p, i),
+                    p.source || "--",
+                    p.expressionSystem || "--",
+                    p.expressionDate || "--",
                     p.mw || "--",
                     p.conc
                       ? `${p.conc} ${p.concUnit === "uM" ? "µM" : "mg/mL"}`
