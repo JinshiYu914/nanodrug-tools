@@ -58,14 +58,15 @@ interface Props {
   data: TlnpExperimentData;
   update: (updater: (prev: TlnpExperimentData) => TlnpExperimentData) => void;
   batchId: string;
+  cloudEnabled: boolean;
 }
 
-export default function ModulePurification({ data, update, batchId }: Props) {
+export default function ModulePurification({ data, update, batchId, cloudEnabled }: Props) {
   const [adding, setAdding] = useState(false);
   const pur = data.purification;
   const systems = data.conjugation.systems;
 
-  const { records, loading, reload } = useRibogreenRecords(systems.length > 0);
+  const { records, loading, reload } = useRibogreenRecords(cloudEnabled && systems.length > 0);
 
   const setPur = (patch: (p: TlnpPurificationModule) => TlnpPurificationModule) =>
     update((prev) => ({ ...prev, purification: patch(prev.purification) }));
@@ -154,7 +155,7 @@ export default function ModulePurification({ data, update, batchId }: Props) {
 
           {pur.design.method === "cl4b" && (
             <div className="space-y-3 rounded-lg border p-3">
-              <Cl4bPresets
+              {cloudEnabled ? <Cl4bPresets
                 current={{
                   columnLength: pur.design.cl4b.columnLength,
                   columnDiameter: pur.design.cl4b.columnDiameter,
@@ -164,7 +165,7 @@ export default function ModulePurification({ data, update, batchId }: Props) {
                 onApply={(p) =>
                   setDesign({ cl4b: { ...pur.design.cl4b, ...p } })
                 }
-              />
+              /> : <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">登录后可读取和保存“我的柱子”预设。</p>}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label="柱长 (cm)">
@@ -405,6 +406,7 @@ export default function ModulePurification({ data, update, batchId }: Props) {
               disabled={systems.length === 0}
               onRefresh={() => void reload()}
               refreshing={loading}
+              loginRequired={!cloudEnabled}
             />
           </div>
           <CardDescription>

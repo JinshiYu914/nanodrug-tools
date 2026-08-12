@@ -43,6 +43,7 @@ interface Props {
   batchName: string;
   createdAt: string;
   updatedAt: string;
+  cloudEnabled: boolean;
 }
 
 /** Module 1 — 实验设计 above, 表征结果 below. */
@@ -53,11 +54,12 @@ export default function ModulePrep({
   batchName,
   createdAt,
   updatedAt,
+  cloudEnabled,
 }: Props) {
   const prep = data.prep;
   const [editing, setEditing] = useState<TlnpPrepSample | null>(null);
   const { records, loading, reload } = useRibogreenRecords(
-    prep.samples.length > 0
+    cloudEnabled && prep.samples.length > 0
   );
 
   const setPrep = (patch: (p: TlnpPrepModule) => TlnpPrepModule) =>
@@ -210,6 +212,7 @@ export default function ModulePrep({
               disabled={prep.samples.length === 0}
               onRefresh={() => void reload()}
               refreshing={loading}
+              loginRequired={!cloudEnabled}
             />
           </div>
           <CardDescription>

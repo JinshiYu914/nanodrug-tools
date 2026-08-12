@@ -40,7 +40,6 @@ import {
   createItem,
   deleteItem,
   duplicateItem,
-  listAllItems,
   moveItem,
   renameItem,
   type LnpSavedItem,
@@ -48,10 +47,12 @@ import {
 } from "@/lib/supabase/lnp-service";
 import { emptyIvtBatch, serializeIvtBatch } from "@/lib/calculations/ivt-experiment";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
+import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
 
 const MIGRATION = "006_ivt_mrna.sql";
 
 interface Props {
+  userId: string;
   activeBatchId: string | null;
   onSelectBatch: (item: LnpSavedItem) => void;
   onBatchDeleted: (id: string) => void;
@@ -59,6 +60,7 @@ interface Props {
 }
 
 export default function IvtBatchSidebar({
+  userId,
   activeBatchId,
   onSelectBatch,
   onBatchDeleted,
@@ -74,14 +76,14 @@ export default function IvtBatchSidebar({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listAllItems("ivt_batch"));
+      setItems(await listSyncedWorkbenchItems(userId, "ivt_batch"));
     } catch (error) {
       console.warn("[ivt] 批次加载失败", error);
       toast.error(describeError(error, MIGRATION));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => void reload(), [reload, refreshToken]);
 

@@ -26,6 +26,7 @@ import type {
 interface Props {
   data: TlnpExperimentData;
   update: (updater: (prev: TlnpExperimentData) => TlnpExperimentData) => void;
+  cloudEnabled: boolean;
 }
 
 /**
@@ -36,7 +37,7 @@ interface Props {
  * to exist before a column can point at it, and a column has to exist before
  * there is a volume to pipette.
  */
-export default function ModuleConjugation({ data, update }: Props) {
+export default function ModuleConjugation({ data, update, cloudEnabled }: Props) {
   const conj = data.conjugation;
   const samples = data.prep.samples;
 
@@ -99,7 +100,7 @@ export default function ModuleConjugation({ data, update }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ProteinBench proteins={conj.proteins} onChange={setProteins} />
+          <ProteinBench proteins={conj.proteins} onChange={setProteins} cloudEnabled={cloudEnabled} />
         </CardContent>
       </Card>
 

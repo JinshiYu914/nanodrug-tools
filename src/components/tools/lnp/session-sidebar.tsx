@@ -43,13 +43,13 @@ import {
   buildTree,
   createItem,
   deleteItem,
-  listAllItems,
   moveItem,
   renameItem,
   type LnpSavedItem,
   type TreeNode,
 } from "@/lib/supabase/lnp-service";
 import { emptyBenchSession } from "@/lib/calculations/lnp-bench";
+import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
 
 function formatTimestamp(dateStr: string): string {
   const d = new Date(dateStr);
@@ -65,6 +65,7 @@ function formatTimestamp(dateStr: string): string {
 }
 
 interface Props {
+  userId: string;
   activeSessionId: string | null;
   onSelectSession: (item: LnpSavedItem) => void;
   onSessionDeleted: (id: string) => void;
@@ -73,6 +74,7 @@ interface Props {
 }
 
 export default function ScreeningSessionSidebar({
+  userId,
   activeSessionId,
   onSelectSession,
   onSessionDeleted,
@@ -89,7 +91,7 @@ export default function ScreeningSessionSidebar({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listAllItems("screening_session");
+      const rows = await listSyncedWorkbenchItems(userId, "screening_session");
       setItems(rows);
     } catch (e) {
       toast.error("加载筛选会话失败");
@@ -97,7 +99,7 @@ export default function ScreeningSessionSidebar({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     reload();

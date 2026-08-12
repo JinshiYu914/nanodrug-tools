@@ -176,9 +176,21 @@ function purifiedCharacterization(d: TlnpExperimentData): Cell[][] {
 }
 
 function proteinRows(d: TlnpExperimentData): Cell[][] {
-  const head: Cell[] = ["抗体", "分子量 (Da)", "浓度", "单位", "备注"];
+  const head: Cell[] = [
+    "抗体",
+    "来源",
+    "表达载体",
+    "表达日期",
+    "分子量 (Da)",
+    "浓度",
+    "单位",
+    "备注",
+  ];
   const body = d.conjugation.proteins.map((p, i) => [
     proteinName(p, i),
+    p.source,
+    p.expressionSystem,
+    p.expressionDate,
     p.mw,
     p.conc,
     p.concUnit === "uM" ? "µM" : "mg/mL",
@@ -467,6 +479,7 @@ export function buildCompareSheet(entries: CompareEntry[]): XLSX.WorkSheet {
     "纯化方式",
     "样品数",
     "抗体数",
+    "抗体信息",
     "反应体系数",
     "平均粒径 (nm)",
     "平均 PDI",
@@ -489,6 +502,13 @@ export function buildCompareSheet(entries: CompareEntry[]): XLSX.WorkSheet {
       s.purificationLabel,
       s.sampleCount,
       s.proteinCount,
+      data.conjugation.proteins
+        .map((p, i) =>
+          [proteinName(p, i), p.source, p.expressionSystem, p.expressionDate]
+            .filter(Boolean)
+            .join(" / ")
+        )
+        .join("；"),
       s.systemCount,
       n2(s.meanSize_nm),
       n2(s.meanPdi),

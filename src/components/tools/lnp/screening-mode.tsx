@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   FlaskConical,
   Plus,
-  Save,
   RotateCcw,
-  Loader2,
   Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +35,9 @@ import {
 } from "@/lib/calculations/lnp-bench";
 import { collectLinkedFormulationIds } from "@/lib/calculations/ribogreen";
 import type { LipidEntry } from "@/lib/calculations/lnp-formula";
+import { useUser } from "@/lib/supabase/use-user";
+import { useSyncedWorkbench } from "@/lib/supabase/use-synced-workbench";
+import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 
 const num = (s: string) => {
   const n = parseFloat(s);
@@ -81,7 +82,6 @@ function validateForBench(
 import {
   getItem,
   listAllItems,
-  updateItemData,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
 import { exportBenchToXlsx } from "@/lib/export/lnp-bench-xlsx";
@@ -101,24 +101,39 @@ interface ScreeningModeProps {
   onOpenRibogreenRecord?: (itemId: string) => void;
 }
 
+const parseScreeningSession = (raw: unknown) =>
+  parseBenchSession(raw as Record<string, unknown> | null | undefined);
+const serializeScreeningSession = (value: BenchSessionData) =>
+  value as unknown as Record<string, unknown>;
+
 export default function ScreeningMode({
   focus,
   onFocusHandled,
   onOpenRibogreenRecord,
 }: ScreeningModeProps = {}) {
-  const [activeSession, setActiveSession] = useState<LnpSavedItem | null>(
-    null
-  );
-  const [sessionData, setSessionData] = useState<BenchSessionData>(
-    emptyBenchSession
-  );
+  const { user } = useUser();
+  const {
+    item: activeSession,
+    data: sessionData,
+    update: setSessionData,
+    select: selectSession,
+    clear: clearSession,
+    lastSavedAt,
+    refreshToken,
+    syncState,
+  } = useSyncedWorkbench<BenchSessionData>({
+    userId: user?.id ?? null,
+    type: "screening_session",
+    empty: emptyBenchSession,
+    parse: parseScreeningSession,
+    serialize: serializeScreeningSession,
+    autosaveDelay: 200,
+    migration: "008_workbench_sync_safety.sql",
+  });
   const [workspace, setWorkspace] = useState<WorkspaceValue>(
     createDefaultWorkspaceValue
   );
   const [formulationName, setFormulationName] = useState("");
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [exporting, setExporting] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   // formulation id → the saved RiboGreen records that measured it
@@ -126,54 +141,12 @@ export default function ScreeningMode({
     () => new Map()
   );
 
-  // Persist sessionData to Supabase whenever it mutates (after initial load).
-  const sessionIdRef = useRef<string | null>(null);
-  const loadingRef = useRef(false);
-  useEffect(() => {
-    if (!activeSession) return;
-    if (loadingRef.current) {
-      loadingRef.current = false;
-      return;
-    }
-    if (sessionIdRef.current !== activeSession.id) {
-      sessionIdRef.current = activeSession.id;
-      return;
-    }
-    let cancelled = false;
-    void Promise.resolve().then(async () => {
-      if (cancelled) return;
-      setSaving(true);
-      try {
-        await updateItemData(
-          activeSession.id,
-          sessionData as unknown as Record<string, unknown>
-        );
-        if (!cancelled) {
-          setLastSavedAt(new Date());
-          setRefreshToken((t) => t + 1);
-        }
-      } catch (e) {
-        console.error(e);
-        toast.error("保存失败");
-      } finally {
-        if (!cancelled) setSaving(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionData, activeSession]);
-
   const handleSelectSession = useCallback((item: LnpSavedItem) => {
-    loadingRef.current = true;
-    sessionIdRef.current = item.id;
-    setActiveSession(item);
-    setSessionData(parseBenchSession(item.data));
+    selectSession(item);
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
-    setLastSavedAt(null);
     setHighlightId(null);
-  }, []);
+  }, [selectSession]);
 
   // Which saved RiboGreen records reference which formulation. Loaded once per
   // mount — this tab is unmounted whenever it isn't showing, so re-entering it
@@ -206,14 +179,12 @@ export default function ScreeningMode({
   const handleSessionDeleted = useCallback(
     (id: string) => {
       if (activeSession?.id === id) {
-        sessionIdRef.current = null;
-        setActiveSession(null);
-        setSessionData(emptyBenchSession());
+        clearSession();
         setWorkspace(createDefaultWorkspaceValue());
         setFormulationName("");
       }
     },
-    [activeSession]
+    [activeSession, clearSession]
   );
 
   // A RiboGreen sample asked for its source formulation: switch sessions if
@@ -408,6 +379,7 @@ export default function ScreeningMode({
       {/* Sidebar */}
       <aside>
         <ScreeningSessionSidebar
+          userId={user!.id}
           activeSessionId={activeSession?.id ?? null}
           onSelectSession={handleSelectSession}
           onSessionDeleted={handleSessionDeleted}
@@ -455,17 +427,7 @@ export default function ScreeningMode({
                     <span>
                       {sessionData.formulations.length} 个配方
                     </span>
-                    {saving ? (
-                      <span className="flex items-center gap-1 text-primary">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        保存中
-                      </span>
-                    ) : lastSavedAt ? (
-                      <span className="flex items-center gap-1 text-success">
-                        <Save className="h-3 w-3" />
-                        已保存 {formatTime(lastSavedAt)}
-                      </span>
-                    ) : null}
+                    <WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} />
                   </div>
                 </div>
               </CardContent>
@@ -561,8 +523,4 @@ export default function ScreeningMode({
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function formatTime(d: Date): string {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 }

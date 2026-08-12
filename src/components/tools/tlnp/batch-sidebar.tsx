@@ -45,7 +45,6 @@ import {
   createItem,
   deleteItem,
   duplicateItem,
-  listAllItems,
   moveItem,
   renameItem,
   type LnpSavedItem,
@@ -56,6 +55,7 @@ import {
   serializeTlnpExperiment,
 } from "@/lib/calculations/tlnp-experiment";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
+import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
 
 const MIGRATION = "004_tlnp_experiment.sql";
 
@@ -73,6 +73,7 @@ function formatTimestamp(dateStr: string): string {
 }
 
 interface Props {
+  userId: string;
   activeBatchId: string | null;
   onSelectBatch: (item: LnpSavedItem) => void;
   onBatchDeleted: (id: string) => void;
@@ -86,6 +87,7 @@ interface Props {
  * extra table.
  */
 export default function BatchSidebar({
+  userId,
   activeBatchId,
   onSelectBatch,
   onBatchDeleted,
@@ -102,14 +104,14 @@ export default function BatchSidebar({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listAllItems("tlnp_experiment"));
+      setItems(await listSyncedWorkbenchItems(userId, "tlnp_experiment"));
     } catch (e) {
       console.error(e);
       toast.error(describeError(e, MIGRATION));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     void reload();

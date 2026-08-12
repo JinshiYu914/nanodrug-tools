@@ -11,6 +11,7 @@ interface Props {
   disabled?: boolean;
   onRefresh: () => void;
   refreshing: boolean;
+  loginRequired?: boolean;
 }
 
 /**
@@ -30,7 +31,11 @@ export default function RibogreenHandoffButton({
   disabled,
   onRefresh,
   refreshing,
+  loginRequired = false,
 }: Props) {
+  if (loginRequired) {
+    return <Link href="/login"><Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"><Calculator className="h-3.5 w-3.5" />登录后使用 RiboGreen 联动</Button></Link>;
+  }
   return (
     <div className="flex items-center gap-1.5">
       <button

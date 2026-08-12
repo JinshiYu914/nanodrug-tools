@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   deleteProtein,
   listProteins,
@@ -26,12 +27,14 @@ import {
   type ProteinEntry,
 } from "@/lib/calculations/tlnp-experiment";
 import { proteinNmolPerUL } from "@/lib/calculations/tlnp-conjugation";
+import OptionSelect from "./option-select";
 
 const MIGRATION = "005_tlnp_libraries.sql";
 
 interface Props {
   proteins: ProteinEntry[];
   onChange: (next: ProteinEntry[]) => void;
+  cloudEnabled: boolean;
 }
 
 /**
@@ -41,7 +44,7 @@ interface Props {
  * there so a molecular weight is typed once, not so that editing it later
  * rewrites what a finished experiment says was added.
  */
-export default function ProteinBench({ proteins, onChange }: Props) {
+export default function ProteinBench({ proteins, onChange, cloudEnabled }: Props) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [library, setLibrary] = useState<ProteinLibraryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,6 +86,9 @@ export default function ProteinBench({ proteins, onChange }: Props) {
         mw: item.mw,
         conc: item.conc,
         concUnit: item.concUnit,
+        source: item.source,
+        expressionSystem: item.expressionSystem,
+        expressionDate: item.expressionDate,
         note: item.note,
         libraryId: item.id,
       },
@@ -102,6 +108,9 @@ export default function ProteinBench({ proteins, onChange }: Props) {
         mw: p.mw,
         conc: p.conc,
         concUnit: p.concUnit,
+        source: p.source,
+        expressionSystem: p.expressionSystem,
+        expressionDate: p.expressionDate,
         note: p.note,
       });
       patch(p.id, { libraryId: saved.id });
@@ -137,7 +146,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               <Plus className="h-3.5 w-3.5" />
               添加抗体
             </Button>
-            <Button
+            {cloudEnabled && <Button
               size="sm"
               variant="outline"
               className="gap-1.5"
@@ -145,7 +154,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
             >
               <Library className="h-3.5 w-3.5" />
               从抗体库选择
-            </Button>
+            </Button>}
           </div>
         </div>
       ) : (
@@ -171,7 +180,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                       />
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 pt-5">
-                      <button
+                      {cloudEnabled && <button
                         type="button"
                         title={
                           p.libraryId
@@ -186,7 +195,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                         ) : (
                           <Save className="h-3.5 w-3.5" />
                         )}
-                      </button>
+                      </button>}
                       <button
                         type="button"
                         title="从本批次移除"
@@ -247,6 +256,47 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                       ? "填入分子量与浓度后显示 nmol/µL"
                       : `${perUL.toFixed(4)} nmol/µL`}
                   </p>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">来源</Label>
+                      <OptionSelect
+                        value={p.source}
+                        options={["自表达", "外包表达", "商品化"]}
+                        onChange={(source) => patch(p.id, { source })}
+                        placeholder="自定义来源"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">表达载体</Label>
+                      <OptionSelect
+                        value={p.expressionSystem}
+                        options={["原核", "293F"]}
+                        onChange={(expressionSystem) => patch(p.id, { expressionSystem })}
+                        placeholder="自定义表达载体"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">表达日期</Label>
+                      <Input
+                        type="date"
+                        value={p.expressionDate}
+                        onChange={(e) => patch(p.id, { expressionDate: e.target.value })}
+                        className="h-7 px-2 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">备注</Label>
+                    <Textarea
+                      value={p.note}
+                      onChange={(e) => patch(p.id, { note: e.target.value })}
+                      placeholder="批号、纯化方式、供应商或其他说明"
+                      rows={2}
+                      className="min-h-14 text-xs"
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -262,7 +312,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
               <Plus className="h-3.5 w-3.5" />
               添加抗体
             </Button>
-            <Button
+            {cloudEnabled && <Button
               size="sm"
               variant="ghost"
               className="gap-1.5"
@@ -270,12 +320,12 @@ export default function ProteinBench({ proteins, onChange }: Props) {
             >
               <Library className="h-3.5 w-3.5" />
               从抗体库选择
-            </Button>
+            </Button>}
           </div>
         </>
       )}
 
-      <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+      {cloudEnabled && <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>我的抗体库</DialogTitle>
@@ -306,6 +356,11 @@ export default function ProteinBench({ proteins, onChange }: Props) {
                       {item.mw || "--"} Da · {item.conc || "--"}{" "}
                       {item.concUnit === "uM" ? "µM" : "mg/mL"}
                     </p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {[item.source, item.expressionSystem, item.expressionDate]
+                        .filter(Boolean)
+                        .join(" · ") || "未填写来源与表达信息"}
+                    </p>
                   </div>
                   <Button
                     size="sm"
@@ -334,7 +389,7 @@ export default function ProteinBench({ proteins, onChange }: Props) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

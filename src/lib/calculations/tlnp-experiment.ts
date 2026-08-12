@@ -56,9 +56,10 @@ import {
 /**
  * v2 replaced module 2's sample × condition graph with the reaction matrix.
  * v3 dosed the reaction off 投料 RNA mass instead of an LNP volume, and turned
- * module 4 into a parameter bench plus two purpose-built result tables.
+ * module 4 into a parameter bench plus two purpose-built result tables. v4
+ * records antibody sourcing and expression provenance.
  */
-export const TLNP_SCHEMA_VERSION = 3;
+export const TLNP_SCHEMA_VERSION = 4;
 
 // ─── Shared result shapes ─────────────────────────────────
 
@@ -320,6 +321,12 @@ export interface ProteinEntry {
   mw: string;
   conc: string;
   concUnit: ProteinConcUnit;
+  /** 自表达 / 外包表达 / 商品化 / a user-entered value. */
+  source: string;
+  /** UI label: 表达载体; 原核 / 293F / a user-entered value. */
+  expressionSystem: string;
+  /** ISO date when available. */
+  expressionDate: string;
   note: string;
   libraryId: string;
 }
@@ -331,6 +338,9 @@ export function createProteinEntry(index = 0): ProteinEntry {
     mw: "",
     conc: "",
     concUnit: "mg_per_mL",
+    source: "",
+    expressionSystem: "",
+    expressionDate: "",
     note: "",
     libraryId: "",
   };
@@ -1096,6 +1106,9 @@ function parseProtein(raw: unknown, index: number): ProteinEntry {
     mw: str(o.mw),
     conc: str(o.conc),
     concUnit: pick(o.concUnit, ["mg_per_mL", "uM"] as const, "mg_per_mL"),
+    source: str(o.source),
+    expressionSystem: str(o.expressionSystem),
+    expressionDate: str(o.expressionDate),
     note: str(o.note),
     libraryId: str(o.libraryId),
   };

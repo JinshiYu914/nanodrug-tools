@@ -32,6 +32,9 @@ export interface ProteinLibraryItem {
   mw: string;
   conc: string;
   concUnit: ProteinConcUnit;
+  source: string;
+  expressionSystem: string;
+  expressionDate: string;
   note: string;
 }
 
@@ -43,6 +46,9 @@ function parseProteinRow(row: LnpSavedItem): ProteinLibraryItem {
     mw: str(d.mw),
     conc: str(d.conc),
     concUnit: d.concUnit === "uM" ? "uM" : "mg_per_mL",
+    source: str(d.source),
+    expressionSystem: str(d.expressionSystem),
+    expressionDate: str(d.expressionDate),
     note: str(d.note),
   };
 }
@@ -60,7 +66,15 @@ export async function saveProtein(
     is_folder: false,
     parent_id: null,
     name: p.name.trim() || "未命名抗体",
-    data: { mw: p.mw, conc: p.conc, concUnit: p.concUnit, note: p.note },
+    data: {
+      mw: p.mw,
+      conc: p.conc,
+      concUnit: p.concUnit,
+      source: p.source,
+      expressionSystem: p.expressionSystem,
+      expressionDate: p.expressionDate,
+      note: p.note,
+    },
     sort_order: 0,
   });
   return parseProteinRow(row);
@@ -72,6 +86,9 @@ export async function updateProtein(p: ProteinLibraryItem): Promise<void> {
     mw: p.mw,
     conc: p.conc,
     concUnit: p.concUnit,
+    source: p.source,
+    expressionSystem: p.expressionSystem,
+    expressionDate: p.expressionDate,
     note: p.note,
   });
 }
