@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Save, Loader2 } from "lucide-react";
+import { FolderKanban, User, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import Link from "next/link";
 
 interface ProfileData {
   displayName: string;
@@ -112,6 +113,9 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-bold">个人信息</h1>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>
+        <Button variant="outline" asChild className="ml-auto">
+          <Link href="/profile/projects"><FolderKanban className="h-4 w-4" />My Projects</Link>
+        </Button>
       </div>
 
       <form onSubmit={handleSave}>

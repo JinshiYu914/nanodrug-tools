@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Folder,
   FolderOpen,
@@ -50,6 +50,9 @@ import {
 } from "@/lib/supabase/lnp-service";
 import { emptyBenchSession } from "@/lib/calculations/lnp-bench";
 import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
+import CopyScopeAction from "@/components/projects/copy-scope-action";
+import DataScopePicker from "@/components/projects/data-scope-picker";
 
 function formatTimestamp(dateStr: string): string {
   const d = new Date(dateStr);
@@ -71,6 +74,8 @@ interface Props {
   onSessionDeleted: (id: string) => void;
   /** Bumped by parent to force sidebar to reload (after rename / updateItemData). */
   refreshToken?: number;
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
 }
 
 export default function ScreeningSessionSidebar({
@@ -79,7 +84,10 @@ export default function ScreeningSessionSidebar({
   onSelectSession,
   onSessionDeleted,
   refreshToken,
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
 }: Props) {
+  const writable = canEditScope(scope);
   const [items, setItems] = useState<LnpSavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -91,7 +99,7 @@ export default function ScreeningSessionSidebar({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listSyncedWorkbenchItems(userId, "screening_session");
+      const rows = await listSyncedWorkbenchItems(userId, "screening_session", scope);
       setItems(rows);
     } catch (e) {
       toast.error("加载筛选会话失败");
@@ -99,7 +107,7 @@ export default function ScreeningSessionSidebar({
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [scope, userId]);
 
   useEffect(() => {
     reload();
@@ -130,7 +138,7 @@ export default function ScreeningSessionSidebar({
         name,
         data: emptyBenchSession() as unknown as Record<string, unknown>,
         sort_order: 0,
-      });
+      }, scope);
       await reload();
       onSelectSession(row);
       toast.success(`已创建筛选：${name}`);
@@ -149,7 +157,7 @@ export default function ScreeningSessionSidebar({
         name,
         data: null,
         sort_order: 0,
-      });
+      }, scope);
       await reload();
       toast.success("文件夹已创建");
     } catch (e) {
@@ -201,11 +209,20 @@ export default function ScreeningSessionSidebar({
       <Card className="lg:sticky lg:top-6">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm font-semibold">
-              我的配方筛选
+            <CardTitle className="min-w-0 text-sm font-semibold">
+              {onScopeChange ? (
+                <Suspense fallback={<span>我的配方筛选</span>}>
+                  <DataScopePicker
+                    value={scope}
+                    onChange={onScopeChange}
+                    compact
+                    personalLabel="我的配方筛选"
+                  />
+                </Suspense>
+              ) : "我的配方筛选"}
             </CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
+            {writable && <div className="flex items-center gap-1">
+              {writable && <Button
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
@@ -213,7 +230,7 @@ export default function ScreeningSessionSidebar({
                 onClick={() => setNewFolderOpen(true)}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-              </Button>
+              </Button>}
               <Button
                 size="icon"
                 variant="ghost"
@@ -223,7 +240,7 @@ export default function ScreeningSessionSidebar({
               >
                 <Plus className="h-4 w-4" />
               </Button>
-            </div>
+            </div>}
           </div>
         </CardHeader>
         <CardContent className="space-y-0.5 max-h-[70vh] overflow-y-auto pt-0">
@@ -257,13 +274,14 @@ export default function ScreeningSessionSidebar({
                 onRename={setRenameTarget}
                 onMove={setMoveTarget}
                 onDelete={handleDelete}
+                writable={writable}
               />
             ))
           )}
         </CardContent>
       </Card>
 
-      <NewItemDialog
+      {writable && <NewItemDialog
         open={newSessionOpen}
         onOpenChange={setNewSessionOpen}
         title="新建配方筛选"
@@ -271,9 +289,9 @@ export default function ScreeningSessionSidebar({
         placeholder="例如：LNP-SM102-NP滴定"
         folders={folders}
         onSubmit={(name, parent) => createSession(name, parent)}
-      />
+      />}
 
-      <NewItemDialog
+      {writable && <NewItemDialog
         open={newFolderOpen}
         onOpenChange={setNewFolderOpen}
         title="新建文件夹"
@@ -281,7 +299,7 @@ export default function ScreeningSessionSidebar({
         placeholder="文件夹名"
         folders={folders}
         onSubmit={(name, parent) => createFolder(name, parent)}
-      />
+      />}
 
       {moveTarget && (
         <MoveDialog
@@ -315,6 +333,7 @@ interface TreeRowProps {
   onRename: (item: LnpSavedItem) => void;
   onMove: (item: LnpSavedItem) => void;
   onDelete: (item: LnpSavedItem) => void;
+  writable: boolean;
 }
 
 function TreeRow({
@@ -327,6 +346,7 @@ function TreeRow({
   onRename,
   onMove,
   onDelete,
+  writable,
 }: TreeRowProps) {
   const isOpen = expanded.has(node.id);
   const isActive = !node.is_folder && node.id === activeSessionId;
@@ -377,7 +397,8 @@ function TreeRow({
           )}
         </button>
 
-        <DropdownMenu>
+        {!node.is_folder && <span className="opacity-0 group-hover:opacity-100"><CopyScopeAction item={node} compact /></span>}
+        {writable && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 p-0.5 text-muted-foreground hover:text-foreground shrink-0"
@@ -404,7 +425,7 @@ function TreeRow({
               删除
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
       </div>
 
       {node.is_folder &&
@@ -421,6 +442,7 @@ function TreeRow({
             onRename={onRename}
             onMove={onMove}
             onDelete={onDelete}
+            writable={writable}
           />
         ))}
     </>

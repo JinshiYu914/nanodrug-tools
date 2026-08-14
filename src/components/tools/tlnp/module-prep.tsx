@@ -35,6 +35,7 @@ import type {
   TlnpPrepModule,
   TlnpPrepSample,
 } from "@/lib/calculations/tlnp-experiment";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 interface Props {
   data: TlnpExperimentData;
@@ -44,6 +45,7 @@ interface Props {
   createdAt: string;
   updatedAt: string;
   cloudEnabled: boolean;
+  scope?: DataScope;
 }
 
 /** Module 1 — 实验设计 above, 表征结果 below. */
@@ -55,11 +57,13 @@ export default function ModulePrep({
   createdAt,
   updatedAt,
   cloudEnabled,
+  scope = PERSONAL_SCOPE,
 }: Props) {
   const prep = data.prep;
   const [editing, setEditing] = useState<TlnpPrepSample | null>(null);
   const { records, loading, reload } = useRibogreenRecords(
-    cloudEnabled && prep.samples.length > 0
+    cloudEnabled && prep.samples.length > 0,
+    scope
   );
 
   const setPrep = (patch: (p: TlnpPrepModule) => TlnpPrepModule) =>
@@ -206,13 +210,14 @@ export default function ModulePrep({
               <TestTube2 className="h-4 w-4 text-pillar-utr" />
               <CardTitle className="text-base">表征结果</CardTitle>
             </div>
-            <RibogreenHandoffButton
+          <RibogreenHandoffButton
               batchId={batchId}
               stage="prep"
               disabled={prep.samples.length === 0}
               onRefresh={() => void reload()}
               refreshing={loading}
-              loginRequired={!cloudEnabled}
+            loginRequired={!cloudEnabled}
+            projectId={scope.kind === "project" ? scope.projectId : undefined}
             />
           </div>
           <CardDescription>

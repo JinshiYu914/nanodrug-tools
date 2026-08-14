@@ -12,6 +12,7 @@ interface Props {
   onRefresh: () => void;
   refreshing: boolean;
   loginRequired?: boolean;
+  projectId?: string;
 }
 
 /**
@@ -32,6 +33,7 @@ export default function RibogreenHandoffButton({
   onRefresh,
   refreshing,
   loginRequired = false,
+  projectId,
 }: Props) {
   if (loginRequired) {
     return <Link href="/login"><Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"><Calculator className="h-3.5 w-3.5" />登录后使用 RiboGreen 联动</Button></Link>;
@@ -57,7 +59,7 @@ export default function RibogreenHandoffButton({
           输入酶标仪检测结果开始计算
         </Button>
       ) : (
-        <Link href={handoffUrl(batchId, stage)}>
+        <Link href={handoffUrl(batchId, stage, projectId)}>
           <Button size="sm" className="h-8 gap-1.5 text-xs">
             <Calculator className="h-3.5 w-3.5" />
             输入酶标仪检测结果开始计算

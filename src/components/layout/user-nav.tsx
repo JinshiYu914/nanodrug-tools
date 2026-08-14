@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, User, Settings, MessageSquare } from "lucide-react";
+import { FolderKanban, LogOut, User, Settings, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -71,6 +71,12 @@ export function UserNav() {
           <Link href="/profile">
             <Settings className="mr-2 h-4 w-4" />
             <span>Profile</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/profile/projects">
+            <FolderKanban className="mr-2 h-4 w-4" />
+            <span>My Projects</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">

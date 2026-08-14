@@ -1,22 +1,11 @@
 import type { Metadata } from "next";
-import {
-  CHANGELOG,
-  CHANGE_KIND_LABEL,
-  type ChangeKind,
-} from "@/content/changelog";
+import { CHANGELOG } from "@/content/changelog";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "更新日志 · Changelog",
   description:
     "站点自上线以来的每一次版本改动，按时间线排列 — 新增的工具、改进的算法和修复的问题。",
-};
-
-const KIND_CLASS: Record<ChangeKind, string> = {
-  feature: "border-primary/40 bg-primary/10 text-primary",
-  improvement: "border-ink/20 bg-secondary text-foreground",
-  fix: "border-warning/40 bg-warning-subtle text-warning",
-  design: "border-ink/20 bg-muted text-muted-foreground",
 };
 
 function formatDate(iso: string): string {
@@ -70,27 +59,20 @@ export default function ChangelogPage() {
                 </span>
               </div>
 
-              {entry.summary && (
-                <p className="mt-2 leading-relaxed text-muted-foreground">
-                  {entry.summary}
-                </p>
-              )}
+              <p className="mt-2 leading-relaxed text-muted-foreground">
+                {entry.summary}
+              </p>
 
-              <ul className="mt-4 space-y-2.5">
-                {entry.changes.map((c, j) => (
-                  <li key={j} className="flex gap-2.5 text-sm leading-relaxed">
-                    <span
-                      className={cn(
-                        "mt-0.5 h-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold",
-                        KIND_CLASS[c.kind]
-                      )}
-                    >
-                      {CHANGE_KIND_LABEL[c.kind]}
-                    </span>
-                    <span>{c.text}</span>
-                  </li>
-                ))}
-              </ul>
+              {entry.highlights && (
+                <ul className="mt-4 space-y-1.5 text-sm leading-relaxed">
+                  {entry.highlights.map((highlight) => (
+                    <li key={highlight} className="flex gap-2.5">
+                      <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground" />
+                      <span>{highlight}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </li>
         ))}

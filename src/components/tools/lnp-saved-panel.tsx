@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Folder,
   FolderOpen,
@@ -39,6 +39,9 @@ import {
 } from "@/lib/supabase/lnp-service";
 import { getCurrentUserId } from "@/lib/supabase/use-user";
 import * as XLSX from "xlsx";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
+import CopyScopeAction from "@/components/projects/copy-scope-action";
+import DataScopePicker from "@/components/projects/data-scope-picker";
 
 type SortMode = "time" | "name" | "custom";
 
@@ -47,6 +50,8 @@ interface SavedPanelProps {
   title: string;
   onLoad: (data: Record<string, unknown>) => void;
   getCurrentData: () => Record<string, unknown>;
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -89,7 +94,10 @@ export default function LnpSavedPanel({
   title,
   onLoad,
   getCurrentData,
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
 }: SavedPanelProps) {
+  const writable = canEditScope(scope);
   const [userId, setUserId] = useState<string | null>(null);
   const [items, setItems] = useState<LnpSavedItem[]>([]);
   const [saveName, setSaveName] = useState("");
@@ -142,7 +150,7 @@ export default function LnpSavedPanel({
     try {
       setLoading(true);
       setError(null);
-      const all = await listAllItems(type);
+      const all = await listAllItems(type, scope);
       setItems(all);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -154,13 +162,19 @@ export default function LnpSavedPanel({
     } finally {
       setLoading(false);
     }
-  }, [type]);
+  }, [scope, type]);
 
   useEffect(() => {
     checkAuth().then((uid) => {
       if (uid) refresh();
     });
   }, [checkAuth, refresh]);
+
+  useEffect(() => {
+    setSaveFolder(null);
+    setRenamingId(null);
+    setShowNewFolder(false);
+  }, [scope]);
 
   async function handleSave() {
     if (!saveName.trim()) return;
@@ -178,7 +192,7 @@ export default function LnpSavedPanel({
         name: saveName.trim(),
         data: getCurrentData(),
         sort_order: maxOrder + 1,
-      });
+      }, scope);
       setSaveName("");
       await refresh();
     } catch {
@@ -200,7 +214,7 @@ export default function LnpSavedPanel({
         name: newFolderName.trim(),
         data: null,
         sort_order: 0,
-      });
+      }, scope);
       setNewFolderName("");
       setShowNewFolder(false);
       await refresh();
@@ -381,7 +395,18 @@ export default function LnpSavedPanel({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-1">
-          <CardTitle className="text-sm">{title}</CardTitle>
+          <CardTitle className="min-w-0 text-sm">
+            {onScopeChange ? (
+              <Suspense fallback={<span>{title}</span>}>
+                <DataScopePicker
+                  value={scope}
+                  onChange={onScopeChange}
+                  compact
+                  personalLabel={title}
+                />
+              </Suspense>
+            ) : title}
+          </CardTitle>
           <div className="flex items-center gap-1">
             <button
               onClick={handleExport}
@@ -408,7 +433,7 @@ export default function LnpSavedPanel({
       </CardHeader>
       <CardContent className="space-y-2">
         {/* Save input */}
-        <div className="space-y-1.5">
+        {writable && <div className="space-y-1.5">
           <Input
             value={saveName}
             onChange={(e) => setSaveName(e.target.value)}
@@ -438,12 +463,12 @@ export default function LnpSavedPanel({
           >
             保存当前配置
           </Button>
-        </div>
+        </div>}
 
-        <Separator />
+        {writable && <Separator />}
 
         {/* New folder */}
-        {showNewFolder ? (
+        {writable && (showNewFolder ? (
           <div className="flex gap-1">
             <Input
               value={newFolderName}
@@ -472,7 +497,7 @@ export default function LnpSavedPanel({
             <Plus className="h-3 w-3" />
             新建文件夹
           </Button>
-        )}
+        ))}
 
         {error && (
           <p className="text-[10px] text-destructive">{error}</p>
@@ -514,6 +539,7 @@ export default function LnpSavedPanel({
               dropTargetId={dropTargetId}
               dropPos={dropPos}
               depth={0}
+              writable={writable}
             />
           ))}
         </div>
@@ -541,6 +567,7 @@ function TreeItemRow({
   dropTargetId,
   dropPos,
   depth,
+  writable,
 }: {
   node: TreeNode;
   indexMap: Map<string, number>;
@@ -560,6 +587,7 @@ function TreeItemRow({
   dropTargetId: string | null;
   dropPos: "before" | "after" | "inside" | null;
   depth: number;
+  writable: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const isDragging = dragId === node.id;
@@ -575,7 +603,7 @@ function TreeItemRow({
               : "hover:bg-muted"
           } ${isDragging ? "opacity-40" : ""}`}
           style={{ paddingLeft: depth * 12 + 2 }}
-          draggable
+          draggable={writable}
           onDragStart={(e) => onDragStart(e, node.id)}
           onDragEnd={onDragEnd}
           onDragOver={(e) => onDragOver(e, node.id, true)}
@@ -612,7 +640,7 @@ function TreeItemRow({
               <span className="text-[9px] text-muted-foreground shrink-0">
                 {node.children.length}
               </span>
-              <button
+              {writable && <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -620,8 +648,8 @@ function TreeItemRow({
                 }}
               >
                 <Pencil className="h-2.5 w-2.5 text-muted-foreground hover:text-primary" />
-              </button>
-              <button
+              </button>}
+              {writable && <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -629,7 +657,7 @@ function TreeItemRow({
                 }}
               >
                 <Trash2 className="h-2.5 w-2.5 text-muted-foreground hover:text-destructive" />
-              </button>
+              </button>}
             </>
           )}
         </div>
@@ -655,6 +683,7 @@ function TreeItemRow({
               dropTargetId={dropTargetId}
               dropPos={dropPos}
               depth={depth + 1}
+              writable={writable}
             />
           ))}
       </div>
@@ -673,7 +702,7 @@ function TreeItemRow({
           isDragging ? "opacity-40" : "hover:bg-muted"
         }`}
         style={{ paddingLeft: depth * 12 + 14 }}
-        draggable
+        draggable={writable}
         onDragStart={(e) => onDragStart(e, node.id)}
         onDragEnd={onDragEnd}
         onDragOver={(e) => onDragOver(e, node.id, false)}
@@ -682,7 +711,7 @@ function TreeItemRow({
           node.data && onLoad(node.data as Record<string, unknown>)
         }
       >
-        <GripVertical className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground cursor-grab" />
+        {writable && <GripVertical className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground cursor-grab" />}
         <span className="text-[9px] text-muted-foreground w-3 text-right shrink-0">
           {displayIdx}
         </span>
@@ -707,7 +736,8 @@ function TreeItemRow({
             <span className="text-[9px] text-muted-foreground shrink-0">
               {formatDate(node.created_at)}
             </span>
-            <button
+            <span className="opacity-0 group-hover:opacity-100"><CopyScopeAction item={node} compact /></span>
+            {writable && <button
               className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
@@ -715,8 +745,8 @@ function TreeItemRow({
               }}
             >
               <Pencil className="h-2.5 w-2.5 text-muted-foreground hover:text-primary" />
-            </button>
-            <button
+            </button>}
+            {writable && <button
               className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
@@ -724,7 +754,7 @@ function TreeItemRow({
               }}
             >
               <Trash2 className="h-2.5 w-2.5 text-muted-foreground hover:text-destructive" />
-            </button>
+            </button>}
           </>
         )}
       </div>

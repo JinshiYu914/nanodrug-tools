@@ -8,6 +8,7 @@ import {
 } from "@/lib/calculations/ribogreen";
 import type { RibogreenLink } from "@/lib/calculations/tlnp-experiment";
 import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 /**
  * Pull the key numbers for one row out of a saved RiboGreen record.
@@ -61,7 +62,7 @@ export function extractLink(
  * One query for the whole module: every row filters the same map rather than
  * each firing its own request.
  */
-export function useRibogreenRecords(enabled: boolean) {
+export function useRibogreenRecords(enabled: boolean, scope: DataScope = PERSONAL_SCOPE) {
   const [map, setMap] = useState<Map<string, LnpSavedItem[]>>(() => new Map());
   const [loading, setLoading] = useState(false);
 
@@ -69,7 +70,7 @@ export function useRibogreenRecords(enabled: boolean) {
     if (!enabled) return;
     setLoading(true);
     try {
-      const rows = await listAllItems("ribogreen_result");
+      const rows = await listAllItems("ribogreen_result", scope);
       const next = new Map<string, LnpSavedItem[]>();
       for (const row of rows) {
         for (const fid of collectLinkedFormulationIds(row.data)) {
@@ -84,7 +85,7 @@ export function useRibogreenRecords(enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, scope]);
 
   useEffect(() => {
     void reload();

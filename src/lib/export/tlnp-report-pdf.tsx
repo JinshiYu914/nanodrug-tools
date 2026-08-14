@@ -15,6 +15,7 @@ import {
 } from "@react-pdf/renderer";
 import {
   buildChromatogramPaths,
+  CHROMATOGRAM_AXIS_LABELS,
   channelPeaks,
   chromatogramDomain,
   type PlotBox,
@@ -235,6 +236,23 @@ function ChromatogramFigure({ c }: { c: Chromatogram }) {
           ) : null
         )}
 
+        {c.showFractionMarks && c.fractionMarks.map((mark) => {
+          const position = mark.positions[c.xAxis];
+          if (position === undefined || position < domains.x.lo || position > domains.x.hi) return null;
+          return (
+            <Line
+              key={mark.id}
+              x1={sx(position)}
+              x2={sx(position)}
+              y1={CHART_BOX.top}
+              y2={CHART_BOX.top + CHART_BOX.height}
+              strokeWidth={0.5}
+              stroke="#7777aa"
+              strokeDasharray="2 2"
+            />
+          );
+        })}
+
         {/* Tick numbers, so a peak position can be read straight off the axis
             rather than only from the legend. Digits are ASCII, so these render
             regardless of which font the SVG layer resolves. */}
@@ -267,7 +285,7 @@ function ChromatogramFigure({ c }: { c: Chromatogram }) {
           font the way the document body does. */}
       <View style={styles.axisRow}>
         <Text style={styles.axisNote}>
-          横轴：{c.xLabel}　纵轴：吸光度
+          X-axis: {CHROMATOGRAM_AXIS_LABELS[c.xAxis]}　Y-axis: Absorbance (mAU)
         </Text>
       </View>
       <View style={styles.legendRow}>
@@ -291,6 +309,11 @@ function ChromatogramFigure({ c }: { c: Chromatogram }) {
           </View>
         ))}
       </View>
+      {c.fractionMarks.length > 0 && (
+        <Text style={styles.axisNote}>
+          Fraction Mark：{c.fractionMarks.map((mark) => `${mark.label} @ ${fmtTick(mark.positions[c.xAxis] ?? 0)}`).join(" · ")}
+        </Text>
+      )}
     </View>
   );
 }

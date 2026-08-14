@@ -7,11 +7,12 @@ import {
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 import { useSyncedWorkbench } from "@/lib/supabase/use-synced-workbench";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const parseTlnp = (raw: unknown) =>
   parseTlnpExperiment(raw as Record<string, unknown> | null | undefined);
 
-export function useTlnpBatch(userId: string | null) {
+export function useTlnpBatch(userId: string | null, scope: DataScope = PERSONAL_SCOPE) {
   const state = useSyncedWorkbench<TlnpExperimentData>({
     userId,
     type: "tlnp_experiment",
@@ -20,6 +21,7 @@ export function useTlnpBatch(userId: string | null) {
     serialize: serializeTlnpExperiment,
     autosaveDelay: 800,
     migration: "008_workbench_sync_safety.sql",
+    scope,
   });
   return { ...state, batch: state.item };
 }

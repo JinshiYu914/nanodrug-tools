@@ -1,4 +1,5 @@
 import { createClient } from "./client";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 export type LnpItemType =
   | "formula"
@@ -15,6 +16,8 @@ export type LnpItemType =
 export interface LnpSavedItem {
   id: string;
   user_id: string;
+  project_id: string | null;
+  last_modified_by: string | null;
   type: LnpItemType;
   is_folder: boolean;
   parent_id: string | null;
@@ -32,13 +35,18 @@ export interface TreeNode extends LnpSavedItem {
 }
 
 export async function listAllItems(
-  type: LnpItemType
+  type: LnpItemType,
+  scope: DataScope = PERSONAL_SCOPE
 ): Promise<LnpSavedItem[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("lnp_saved_items")
     .select("*")
-    .eq("type", type)
+    .eq("type", type);
+  query = scope.kind === "personal"
+    ? query.is("project_id", null)
+    : query.eq("project_id", scope.projectId);
+  const { data, error } = await query
     .order("sort_order")
     .order("created_at", { ascending: false });
 
@@ -63,7 +71,8 @@ export async function createItem(
   item: Pick<
     LnpSavedItem,
     "type" | "is_folder" | "parent_id" | "name" | "data" | "sort_order"
-  >
+  >,
+  scope: DataScope = PERSONAL_SCOPE
 ): Promise<LnpSavedItem> {
   const supabase = createClient();
   const {
@@ -73,7 +82,12 @@ export async function createItem(
 
   const { data, error } = await supabase
     .from("lnp_saved_items")
-    .insert({ ...item, user_id: user.id })
+    .insert({
+      ...item,
+      user_id: user.id,
+      project_id: scope.kind === "project" ? scope.projectId : null,
+      last_modified_by: user.id,
+    })
     .select()
     .single();
 
@@ -157,6 +171,9 @@ export async function duplicateItem(id: string): Promise<LnpSavedItem> {
   if (readErr) throw readErr;
   const s = src as LnpSavedItem;
 
+  const scope: DataScope = s.project_id
+    ? { kind: "project", projectId: s.project_id, role: "admin", status: "active" }
+    : PERSONAL_SCOPE;
   return await createItem({
     type: s.type,
     is_folder: s.is_folder,
@@ -164,7 +181,7 @@ export async function duplicateItem(id: string): Promise<LnpSavedItem> {
     name: `${s.name} (副本)`,
     data: s.data,
     sort_order: s.sort_order + 1,
-  });
+  }, scope);
 }
 
 export async function moveItem(

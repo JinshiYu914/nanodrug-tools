@@ -21,6 +21,7 @@ import {
 import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
 import { exportCompareToXlsx } from "@/lib/export/tlnp-report-xlsx";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const MAX_COMPARE = 4;
 
@@ -36,6 +37,7 @@ interface Loaded {
 interface Props {
   /** Pre-checked so the batch you came from is already in the comparison. */
   activeBatchId: string | null;
+  scope?: DataScope;
 }
 
 /**
@@ -45,7 +47,7 @@ interface Props {
  * summarizeBatch — so a number here can't disagree with the same number on the
  * batch's own report page.
  */
-export default function BatchCompare({ activeBatchId }: Props) {
+export default function BatchCompare({ activeBatchId, scope = PERSONAL_SCOPE }: Props) {
   const [rows, setRows] = useState<Loaded[]>([]);
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState<Set<string>>(
@@ -55,7 +57,7 @@ export default function BatchCompare({ activeBatchId }: Props) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const items = await listAllItems("tlnp_experiment");
+      const items = await listAllItems("tlnp_experiment", scope);
       setRows(
         items
           .filter((i) => !i.is_folder)
@@ -70,7 +72,7 @@ export default function BatchCompare({ activeBatchId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     void reload();

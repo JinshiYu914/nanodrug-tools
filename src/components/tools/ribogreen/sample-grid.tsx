@@ -51,6 +51,7 @@ import BatchFillDialog from "./batch-fill-dialog";
 import FormulationPicker, {
   type PickedFormulation,
 } from "./formulation-picker";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const fmt = (v: number | null | undefined, digits = 2) =>
   v === null || v === undefined || !isFinite(v) ? "--" : v.toFixed(digits);
@@ -84,6 +85,7 @@ interface SampleGridProps {
   onExportXlsx: () => void;
   /** Jump to the screening bench row this sample's formulation came from. */
   onOpenFormulation?: (sessionId: string, formulationId: string) => void;
+  scope?: DataScope;
 }
 
 const INPUT_ROWS: {
@@ -153,6 +155,7 @@ export default function SampleGrid({
   onSave,
   onExportXlsx,
   onOpenFormulation,
+  scope = PERSONAL_SCOPE,
 }: SampleGridProps) {
   const [copied, setCopied] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -354,7 +357,7 @@ export default function SampleGrid({
                         // rather than calling back into this page's tab state.
                         (r.sourceKind === "tlnp_experiment" ? (
                           <Link
-                            href={`/tools/tlnp?batch=${r.sourceSessionId}&m=1`}
+                            href={`/tools/tlnp?batch=${r.sourceSessionId}&m=1${scope.kind === "project" ? `&project=${scope.projectId}` : ""}`}
                             title={`来自 tLNP 批次「${r.sourceSessionName ?? ""}」，点击打开该批次`}
                             className="text-primary hover:text-primary/70"
                           >
@@ -790,6 +793,7 @@ export default function SampleGrid({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         onPick={handlePickFormulations}
+        scope={scope}
       />
     </div>
   );

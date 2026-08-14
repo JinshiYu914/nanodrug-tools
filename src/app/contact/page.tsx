@@ -84,18 +84,19 @@ export default function ContactPage() {
 
       if (error) {
         if (error.code === "42P01") {
-          toast.success("感谢你的反馈！我们会尽快处理。");
-          setSubmitted(true);
-        } else {
-          throw error;
+          throw new Error("反馈功能尚未完成数据库配置，请先应用 011_feedback.sql");
         }
-      } else {
-        toast.success("感谢你的反馈！我们会尽快处理。");
-        setSubmitted(true);
+        throw new Error(error.message || "反馈提交失败");
       }
-    } catch {
-      toast.success("感谢你的反馈！我们已收到你的消息。");
+
+      toast.success("感谢你的反馈！我们会尽快处理。");
       setSubmitted(true);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "反馈提交失败，请稍后重试或通过右侧邮箱联系我们";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

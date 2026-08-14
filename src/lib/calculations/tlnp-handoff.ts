@@ -22,6 +22,7 @@ export type HandoffStage = "prep" | "purify";
 export interface TlnpHandoff {
   batchId: string;
   stage: HandoffStage;
+  projectId?: string;
 }
 
 const STAGE_MODULE: Record<HandoffStage, "1" | "3"> = {
@@ -35,8 +36,9 @@ export const STAGE_LABELS: Record<HandoffStage, string> = {
 };
 
 /** tLNP → the RiboGreen tab, carrying which batch and which stage to prefill. */
-export function handoffUrl(batchId: string, stage: HandoffStage): string {
+export function handoffUrl(batchId: string, stage: HandoffStage, projectId?: string): string {
   const p = new URLSearchParams({ tab: "ribogreen", tlnp: batchId, stage });
+  if (projectId) p.set("project", projectId);
   return `/tools/lnp-formula?${p.toString()}`;
 }
 
@@ -44,13 +46,15 @@ export function handoffUrl(batchId: string, stage: HandoffStage): string {
 export function returnUrl(
   batchId: string,
   stage: HandoffStage,
-  recordId: string
+  recordId: string,
+  projectId?: string
 ): string {
   const p = new URLSearchParams({
     batch: batchId,
     m: STAGE_MODULE[stage],
     import: recordId,
   });
+  if (projectId) p.set("project", projectId);
   return `/tools/tlnp?${p.toString()}`;
 }
 
@@ -61,5 +65,6 @@ export function parseHandoff(
   const batchId = get("tlnp");
   if (!batchId) return null;
   const raw = get("stage");
-  return { batchId, stage: raw === "purify" ? "purify" : "prep" };
+  const projectId = get("project") ?? undefined;
+  return { batchId, stage: raw === "purify" ? "purify" : "prep", projectId };
 }
