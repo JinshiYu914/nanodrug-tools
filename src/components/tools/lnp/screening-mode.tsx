@@ -392,7 +392,7 @@ export default function ScreeningMode({
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       {/* Sidebar */}
       <aside>
         <ScreeningSessionSidebar

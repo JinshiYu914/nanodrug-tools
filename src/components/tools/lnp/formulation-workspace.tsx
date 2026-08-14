@@ -265,7 +265,7 @@ export default function FormulationWorkspace({
   return (
     <>
       {/* ═══ Step 1 ═══════════════════════════════════════ */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_260px] mb-8">
+      <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
@@ -453,7 +453,7 @@ export default function FormulationWorkspace({
       </div>
 
       {/* ═══ Step 2 ═══════════════════════════════════════ */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_260px] mb-8">
+      <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHeader>
             <CardTitle>第二步：定义 LNP 制备参数</CardTitle>

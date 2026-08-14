@@ -209,7 +209,7 @@ export default function ScreeningSessionSidebar({
       <Card className="lg:sticky lg:top-6">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="min-w-0 text-sm font-semibold">
+            <CardTitle className="min-w-0 flex-1 text-sm font-semibold">
               {onScopeChange ? (
                 <Suspense fallback={<span>我的配方筛选</span>}>
                   <DataScopePicker
@@ -354,7 +354,7 @@ function TreeRow({
   return (
     <>
       <div
-        className={`group flex items-center gap-1 rounded-md px-1.5 py-1.5 text-xs hover:bg-muted/50 ${
+        className={`group flex items-start gap-1 rounded-md px-1.5 py-2 text-xs hover:bg-muted/50 ${
           isActive ? "bg-primary/10 text-primary" : ""
         }`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -378,26 +378,28 @@ function TreeRow({
           onClick={() =>
             node.is_folder ? onToggle(node.id) : onSelect(node)
           }
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 text-left"
         >
-          {node.is_folder ? (
-            isOpen ? (
-              <FolderOpen className="h-3.5 w-3.5 text-warning shrink-0" />
+          <span className="flex min-w-0 items-start gap-1.5">
+            {node.is_folder ? (
+              isOpen ? (
+                <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+              ) : (
+                <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+              )
             ) : (
-              <Folder className="h-3.5 w-3.5 text-warning shrink-0" />
-            )
-          ) : (
-            <FlaskConical className="h-3.5 w-3.5 text-primary shrink-0" />
-          )}
-          <span className="truncate">{node.name}</span>
+              <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+            )}
+            <span className="line-clamp-2 break-words leading-4" title={node.name}>{node.name}</span>
+          </span>
           {!node.is_folder && (
-            <span className="ml-auto text-[10px] text-muted-foreground">
+            <span className="whitespace-nowrap text-right text-[10px] leading-4 text-muted-foreground">
               {formatTimestamp(node.updated_at)}
             </span>
           )}
         </button>
 
-        {!node.is_folder && <span className="opacity-0 group-hover:opacity-100"><CopyScopeAction item={node} compact /></span>}
+        {!node.is_folder && <span className="max-w-0 shrink-0 overflow-hidden opacity-0 transition-all group-hover:max-w-8 group-hover:opacity-100 group-focus-within:max-w-8 group-focus-within:opacity-100"><CopyScopeAction item={node} compact /></span>}
         {writable && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

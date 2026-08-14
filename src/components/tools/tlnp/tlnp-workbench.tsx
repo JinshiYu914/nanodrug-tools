@@ -297,7 +297,7 @@ export default function TlnpWorkbench() {
       )}
       {!guest && !canEditScope(scope) && <div className="mb-5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">当前为只读成员权限：可查看与导出，不能修改课题数据。需要个人副本时，请在批次列表使用“复制到我的数据”。</div>}
       {!guest && scope.kind === "project" && syncState === "error" && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm"><span className="min-w-0 flex-1">课题权限或状态已变化，本机草稿尚未写入云端。</span><Button size="sm" variant="outline" onClick={() => void saveDraftToPersonal()}>另存到我的数据</Button></div>}
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside>
           {guest ? (
             <Card className="lg:sticky lg:top-20">

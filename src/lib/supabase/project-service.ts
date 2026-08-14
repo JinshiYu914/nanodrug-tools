@@ -1,6 +1,7 @@
 import { createClient } from "./client";
 import { listAllItems, type LnpSavedItem } from "./lnp-service";
 import { buildCopyBundle, previewCopyBundle } from "@/lib/projects/copy-bundle";
+import { normalizeMyProjectMemberships } from "@/lib/projects/memberships";
 import type {
   ProjectMembership,
   ProjectRole,
@@ -61,15 +62,20 @@ async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
 
 export async function listProjectMemberships(): Promise<ProjectMembership[]> {
   const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) return [];
   const { data, error } = await supabase
     .from("research_project_members")
     .select("project_id,user_id,role,joined_at,project:research_projects(*)")
+    .eq("user_id", user.id)
     .order("joined_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []).map((row) => ({
     ...row,
     project: Array.isArray(row.project) ? row.project[0] : row.project,
   })) as ProjectMembership[];
+  return normalizeMyProjectMemberships(rows, user.id);
 }
 
 export async function createProject(name: string, description: string) {

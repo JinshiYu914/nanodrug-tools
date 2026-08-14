@@ -395,7 +395,7 @@ export default function LnpSavedPanel({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-1">
-          <CardTitle className="min-w-0 text-sm">
+          <CardTitle className="min-w-0 flex-1 text-sm">
             {onScopeChange ? (
               <Suspense fallback={<span>{title}</span>}>
                 <DataScopePicker
@@ -597,7 +597,7 @@ function TreeItemRow({
     return (
       <div>
         <div
-          className={`flex items-center gap-0.5 rounded px-1 py-0.5 cursor-pointer group transition-colors ${
+          className={`group flex cursor-pointer items-start gap-0.5 rounded px-1 py-1.5 transition-colors ${
             isDropTarget && dropPos === "inside"
               ? "ring-1 ring-primary bg-primary/10"
               : "hover:bg-muted"
@@ -634,7 +634,7 @@ function TreeItemRow({
             </div>
           ) : (
             <>
-              <span className="text-[11px] font-medium truncate flex-1 ml-0.5">
+              <span className="ml-0.5 line-clamp-2 min-w-0 flex-1 break-words text-xs font-medium leading-4" title={node.name}>
                 {node.name}
               </span>
               <span className="text-[9px] text-muted-foreground shrink-0">
@@ -698,7 +698,7 @@ function TreeItemRow({
         <div className="absolute top-0 left-2 right-2 h-0.5 bg-primary rounded-full z-10" />
       )}
       <div
-        className={`flex items-center gap-0.5 rounded px-1 py-[3px] cursor-pointer group transition-colors ${
+        className={`group flex cursor-pointer items-start gap-1 rounded px-1 py-1.5 transition-colors ${
           isDragging ? "opacity-40" : "hover:bg-muted"
         }`}
         style={{ paddingLeft: depth * 12 + 14 }}
@@ -715,7 +715,7 @@ function TreeItemRow({
         <span className="text-[9px] text-muted-foreground w-3 text-right shrink-0">
           {displayIdx}
         </span>
-        <FileText className="h-3 w-3 shrink-0 text-info ml-0.5" />
+        <FileText className="ml-0.5 mt-0.5 h-3 w-3 shrink-0 text-info" />
         {renamingId === node.id ? (
           <div className="flex items-center gap-0.5 flex-1 ml-0.5" onClick={(e) => e.stopPropagation()}>
             <Input
@@ -730,13 +730,13 @@ function TreeItemRow({
           </div>
         ) : (
           <>
-            <span className="text-[11px] truncate flex-1 ml-0.5">
+            <span className="ml-0.5 line-clamp-2 min-w-0 flex-1 break-words text-xs leading-4" title={node.name}>
               {node.name}
             </span>
-            <span className="text-[9px] text-muted-foreground shrink-0">
+            <span className="shrink-0 whitespace-nowrap pt-0.5 text-[10px] text-muted-foreground">
               {formatDate(node.created_at)}
             </span>
-            <span className="opacity-0 group-hover:opacity-100"><CopyScopeAction item={node} compact /></span>
+            <span className="max-w-0 shrink-0 overflow-hidden opacity-0 transition-all group-hover:max-w-8 group-hover:opacity-100 group-focus-within:max-w-8 group-focus-within:opacity-100"><CopyScopeAction item={node} compact /></span>
             {writable && <button
               className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 shrink-0"
               onClick={(e) => {

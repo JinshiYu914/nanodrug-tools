@@ -68,7 +68,7 @@ export default function DataScopePicker({
 
   const current = value.kind === "personal" ? "personal" : value.projectId;
   return (
-    <div className={`flex min-w-0 flex-wrap items-center gap-2 ${compact ? "" : "rounded-lg border bg-muted/20 px-3 py-2.5"}`}>
+    <div className={`flex min-w-0 flex-wrap items-center gap-2 ${compact ? "w-full" : "rounded-lg border bg-muted/20 px-3 py-2.5"}`}>
       {!compact && <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <FolderKanban className="h-3.5 w-3.5" />数据归属
       </span>}
@@ -83,7 +83,7 @@ export default function DataScopePicker({
           select({ kind: "project", projectId: id, role: hit.role, status: hit.project.status, name: hit.project.name });
         }}
         className={compact
-          ? "h-7 min-w-0 max-w-full rounded-md border bg-background px-2 text-xs font-semibold"
+          ? "h-8 w-full min-w-0 max-w-full rounded-md border bg-background px-2 text-xs font-semibold"
           : "h-8 min-w-48 rounded-md border bg-background px-2 text-sm"}
       >
         <option value="personal">{personalLabel}</option>

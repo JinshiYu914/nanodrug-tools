@@ -160,7 +160,7 @@ export default function IvtWorkbench() {
         <ViewButton active={view === "batch"} icon={<Dna className="h-3.5 w-3.5" />} label="IVT 批次记录" onClick={() => writeUrl({ view: "batch" })} />
         <ViewButton active={view === "library"} icon={<Library className="h-3.5 w-3.5" />} label="我的 RNA 库" onClick={() => writeUrl({ view: "library" })} />
       </div>
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside><IvtBatchSidebar userId={user!.id} activeBatchId={batch?.id ?? null} onSelectBatch={handleSelectBatch} onBatchDeleted={deleteBatch} refreshToken={refreshToken} /></aside>
         <main className="min-w-0">
           {view === "library" ? (

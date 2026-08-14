@@ -283,7 +283,7 @@ function TreeRow({
   return (
     <>
       <div
-        className={`group flex items-center gap-1 rounded-md px-1.5 py-1.5 text-xs hover:bg-muted/50 ${active ? "bg-primary/10 text-primary" : ""}`}
+        className={`group flex items-start gap-1 rounded-md px-1.5 py-2 text-xs hover:bg-muted/50 ${active ? "bg-primary/10 text-primary" : ""}`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
       >
         {node.is_folder ? (
@@ -296,14 +296,14 @@ function TreeRow({
         <button
           type="button"
           onClick={() => (node.is_folder ? onToggle(node.id) : onSelect(node))}
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
         >
           {node.is_folder ? (
-            open ? <FolderOpen className="h-3.5 w-3.5 text-warning" /> : <Folder className="h-3.5 w-3.5 text-warning" />
+            open ? <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" /> : <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
           ) : (
-            <Dna className="h-3.5 w-3.5 text-primary" />
+            <Dna className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
           )}
-          <span className="truncate">{node.name}</span>
+          <span className="line-clamp-2 break-words leading-4" title={node.name}>{node.name}</span>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive, ArchiveRestore, Check, FolderKanban, MailPlus,
-  Plus, Search, ShieldCheck, UserMinus, Users, X,
+  Plus, Search, UserMinus, Users, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -147,7 +147,46 @@ export default function ProjectsPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-3"><Users className="h-4 w-4 text-primary" /><h3 className="font-semibold">团队成员</h3><span className="text-xs text-muted-foreground">{members.length} 人</span>{canManage && selected.project.status === "active" && <Button className="ml-auto" size="sm" variant="outline" onClick={() => setInviteOpen((open) => !open)}><MailPlus className="h-4 w-4" />邀请成员</Button>}</div>
               {canManage && selected.project.status === "active" && inviteOpen && <div className="mb-4 flex max-w-xl gap-2"><Input autoFocus type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="输入邮箱发送站内邀请" /><Button disabled={!inviteEmail.trim() || busy} onClick={() => run(async () => { await inviteMember(selected.project_id, inviteEmail); setInviteEmail(""); setInviteOpen(false); }, "邀请已发送")}>发送邀请</Button></div>}
-              <div className="divide-y border-y">{members.map((member) => <div key={member.user_id} className="flex flex-wrap items-center gap-3 py-3 text-sm"><div className="min-w-0 flex-1"><p className="truncate font-medium">{member.display_name || member.email.split("@")[0]}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div><Badge variant={member.role === "owner" ? "default" : "outline"}>{ROLE_LABEL[member.role]}</Badge>{selected.role === "owner" && member.role !== "owner" && <Button size="sm" variant="ghost" onClick={() => run(() => setMemberRole(selected.project_id, member.user_id, member.role === "admin" ? "member" : "admin"), "权限已更新")}><ShieldCheck className="h-3.5 w-3.5" />{member.role === "admin" ? "设为成员" : "设为管理员"}</Button>}{canManage && member.role === "member" && member.user_id !== user?.id && <Button size="icon" variant="ghost" title="移除成员" onClick={() => { if (confirm(`确定移除 ${member.email}？`)) void run(() => removeMember(selected.project_id, member.user_id), "成员已移除"); }}><UserMinus className="h-4 w-4" /></Button>}</div>)}</div>
+              <div className="divide-y border-y">
+                {members.map((member) => {
+                  const canChangeRole = canManage
+                    && selected.project.status === "active"
+                    && member.role !== "owner"
+                    && member.user_id !== user?.id;
+                  return (
+                    <div key={member.user_id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{member.display_name || member.email.split("@")[0]}</p>
+                        <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                      </div>
+                      {canChangeRole ? (
+                        <select
+                          aria-label={`设置 ${member.email || member.display_name} 的课题权限`}
+                          value={member.role}
+                          disabled={busy}
+                          onChange={(event) => void run(
+                            () => setMemberRole(selected.project_id, member.user_id, event.target.value as "admin" | "member"),
+                            "权限已更新"
+                          )}
+                          className="h-8 rounded-md border bg-background px-2 text-xs"
+                        >
+                          <option value="admin">管理员</option>
+                          <option value="member">成员</option>
+                        </select>
+                      ) : (
+                        <Badge variant={member.role === "owner" ? "default" : "outline"}>{ROLE_LABEL[member.role]}</Badge>
+                      )}
+                      {canManage && member.role === "member" && member.user_id !== user?.id && (
+                        <Button size="icon" variant="ghost" title="移除成员" onClick={() => {
+                          if (confirm(`确定移除 ${member.email}？`)) void run(() => removeMember(selected.project_id, member.user_id), "成员已移除");
+                        }}>
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {canManage && requests.length > 0 && <div><h3 className="mb-3 font-semibold">加入申请</h3><div className="divide-y border-y">{requests.map((request) => <div key={request.id} className="flex items-center gap-3 py-3 text-sm"><span className="min-w-0 flex-1 truncate">{request.display_name || request.email || "申请人"}</span><Button size="sm" onClick={() => run(() => reviewJoinRequest(request.id, true), "已批准申请")}>批准</Button><Button size="sm" variant="outline" onClick={() => run(() => reviewJoinRequest(request.id, false), "已拒绝申请")}>拒绝</Button></div>)}</div></div>}
