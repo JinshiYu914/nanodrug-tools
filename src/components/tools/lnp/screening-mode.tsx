@@ -38,6 +38,7 @@ import type { LipidEntry } from "@/lib/calculations/lnp-formula";
 import { useUser } from "@/lib/supabase/use-user";
 import { useSyncedWorkbench } from "@/lib/supabase/use-synced-workbench";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const num = (s: string) => {
   const n = parseFloat(s);
@@ -94,6 +95,8 @@ export interface ScreeningFocus {
 }
 
 interface ScreeningModeProps {
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
   /** A formulation the RiboGreen tab asked us to open. */
   focus?: ScreeningFocus | null;
   onFocusHandled?: () => void;
@@ -107,6 +110,8 @@ const serializeScreeningSession = (value: BenchSessionData) =>
   value as unknown as Record<string, unknown>;
 
 export default function ScreeningMode({
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
   focus,
   onFocusHandled,
   onOpenRibogreenRecord,
@@ -121,6 +126,7 @@ export default function ScreeningMode({
     lastSavedAt,
     refreshToken,
     syncState,
+    saveDraftToPersonal,
   } = useSyncedWorkbench<BenchSessionData>({
     userId: user?.id ?? null,
     type: "screening_session",
@@ -129,6 +135,7 @@ export default function ScreeningMode({
     serialize: serializeScreeningSession,
     autosaveDelay: 200,
     migration: "008_workbench_sync_safety.sql",
+    scope,
   });
   const [workspace, setWorkspace] = useState<WorkspaceValue>(
     createDefaultWorkspaceValue
@@ -148,6 +155,11 @@ export default function ScreeningMode({
     setHighlightId(null);
   }, [selectSession]);
 
+  const handleScopeChange = useCallback((next: DataScope) => {
+    clearSession();
+    onScopeChange?.(next);
+  }, [clearSession, onScopeChange]);
+
   // Which saved RiboGreen records reference which formulation. Loaded once per
   // mount — this tab is unmounted whenever it isn't showing, so re-entering it
   // after saving an EE record picks the new links up.
@@ -155,7 +167,7 @@ export default function ScreeningMode({
     let cancelled = false;
     void (async () => {
       try {
-        const rows = await listAllItems("ribogreen_result");
+        const rows = await listAllItems("ribogreen_result", scope);
         if (cancelled) return;
         const map = new Map<string, LnpSavedItem[]>();
         for (const row of rows) {
@@ -174,7 +186,7 @@ export default function ScreeningMode({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   const handleSessionDeleted = useCallback(
     (id: string) => {
@@ -200,6 +212,11 @@ export default function ScreeningMode({
           if (cancelled) return;
           if (!session) {
             toast.error("找不到对应的筛选会话，可能已被删除");
+            return;
+          }
+          const expectedProject = scope.kind === "project" ? scope.projectId : null;
+          if (session.project_id !== expectedProject) {
+            toast.error("筛选会话与当前数据归属不一致");
             return;
           }
           handleSelectSession(session);
@@ -384,11 +401,19 @@ export default function ScreeningMode({
           onSelectSession={handleSelectSession}
           onSessionDeleted={handleSessionDeleted}
           refreshToken={refreshToken}
+          scope={scope}
+          onScopeChange={handleScopeChange}
         />
       </aside>
 
       {/* Main */}
       <div className="space-y-6 min-w-0">
+        {scope.kind === "project" && syncState === "error" && (
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+            <span className="min-w-0 flex-1">课题权限或状态已变化，本机草稿尚未写入云端。</span>
+            <Button size="sm" variant="outline" onClick={() => void saveDraftToPersonal()}>另存到我的数据</Button>
+          </div>
+        )}
         {!activeSession ? (
           <Card>
             <CardHeader>
@@ -446,6 +471,8 @@ export default function ScreeningMode({
                   title="我的配方库"
                   onLoad={loadFormulaFromLibrary}
                   getCurrentData={getFormulaFromWorkspace}
+                  scope={scope}
+                  onScopeChange={handleScopeChange}
                 />
               }
               step2Aside={
@@ -454,6 +481,8 @@ export default function ScreeningMode({
                   title="我的制备参数"
                   onLoad={loadPrepFromLibrary}
                   getCurrentData={getPrepFromWorkspace}
+                  scope={scope}
+                  onScopeChange={handleScopeChange}
                 />
               }
               footerSlot={
@@ -481,12 +510,16 @@ export default function ScreeningMode({
                 title="我的配方库"
                 onLoad={loadFormulaFromLibrary}
                 getCurrentData={getFormulaFromWorkspace}
+                scope={scope}
+                onScopeChange={handleScopeChange}
               />
               <LnpSavedPanel
                 type="preparation"
                 title="我的制备参数"
                 onLoad={loadPrepFromLibrary}
                 getCurrentData={getPrepFromWorkspace}
+                scope={scope}
+                onScopeChange={handleScopeChange}
               />
             </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import {
   LogIn,
   Search,
@@ -45,6 +45,9 @@ import {
 } from "@/lib/calculations/ribogreen";
 import { INSTRUMENT_OPTIONS } from "@/lib/calculations/ribogreen-presets";
 import { useRibogreenSaved } from "./use-ribogreen-saved";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
+import CopyScopeAction from "@/components/projects/copy-scope-action";
+import DataScopePicker from "@/components/projects/data-scope-picker";
 
 const SELECT_CLASS =
   "flex h-8 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -73,15 +76,20 @@ interface Props {
   refreshToken: number;
   onLoad: (data: Record<string, unknown>, item: LnpSavedItem) => void;
   activeItemId: string | null;
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
 }
 
 export default function RibogreenRecordsPanel({
   refreshToken,
   onLoad,
   activeItemId,
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
 }: Props) {
+  const writable = canEditScope(scope);
   const { userId, authLoading, items, loading, rename, remove } =
-    useRibogreenSaved("ribogreen_result", refreshToken);
+    useRibogreenSaved("ribogreen_result", refreshToken, scope);
 
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("all");
@@ -160,7 +168,18 @@ export default function RibogreenRecordsPanel({
       <CardHeader>
         <div className="flex items-center gap-2">
           <FlaskConical className="h-5 w-5 text-primary" />
-          <CardTitle>我的实验记录</CardTitle>
+          <CardTitle className="min-w-0">
+            {onScopeChange ? (
+              <Suspense fallback={<span>我的实验记录</span>}>
+                <DataScopePicker
+                  value={scope}
+                  onChange={onScopeChange}
+                  compact
+                  personalLabel="我的实验记录"
+                />
+              </Suspense>
+            ) : "我的实验记录"}
+          </CardTitle>
         </div>
         <CardDescription>
           共 {items.length} 条记录{visible.length !== items.length && ` · 当前筛选出 ${visible.length} 条`}
@@ -246,6 +265,7 @@ export default function RibogreenRecordsPanel({
                         {recordDate(it)}
                       </p>
                     </div>
+                    <CopyScopeAction item={it} compact />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -261,7 +281,7 @@ export default function RibogreenRecordsPanel({
                           <Download className="h-4 w-4" />
                           载入
                         </DropdownMenuItem>
-                        <DropdownMenuItem
+                        {writable && <DropdownMenuItem
                           onClick={() => {
                             setRenameTarget(it);
                             setRenameValue(it.name);
@@ -269,15 +289,15 @@ export default function RibogreenRecordsPanel({
                         >
                           <Pencil className="h-4 w-4" />
                           重命名
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
+                        </DropdownMenuItem>}
+                        {writable && <DropdownMenuSeparator />}
+                        {writable && <DropdownMenuItem
                           variant="destructive"
                           onClick={() => void remove(it)}
                         >
                           <Trash2 className="h-4 w-4" />
                           删除
-                        </DropdownMenuItem>
+                        </DropdownMenuItem>}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -309,7 +329,7 @@ export default function RibogreenRecordsPanel({
         )}
       </CardContent>
 
-      <Dialog
+      {writable && <Dialog
         open={renameTarget !== null}
         onOpenChange={(o) => !o && setRenameTarget(null)}
       >
@@ -344,7 +364,7 @@ export default function RibogreenRecordsPanel({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </Card>
   );
 }

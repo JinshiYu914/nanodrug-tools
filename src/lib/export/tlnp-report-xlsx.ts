@@ -29,6 +29,7 @@ import {
   type TemFlag,
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
+import { CHROMATOGRAM_AXIS_LABELS } from "@/lib/calculations/chromatogram";
 
 type Cell = string | number;
 
@@ -307,9 +308,16 @@ function chromatogramRows(d: TlnpExperimentData): Cell[][] {
   const out: Cell[][] = [];
   for (const c of d.purification.chromatograms) {
     out.push([c.name, c.note]);
-    out.push([c.xLabel, ...c.channels.map((ch) => ch.label)]);
+    out.push([CHROMATOGRAM_AXIS_LABELS[c.xAxis], ...c.channels.map((ch) => ch.label)]);
     for (const p of c.points) {
       out.push([p.x, ...p.y.map((v) => (v === null ? "" : v))]);
+    }
+    if (c.fractionMarks.length > 0) {
+      out.push([]);
+      out.push(["Fraction Mark", CHROMATOGRAM_AXIS_LABELS[c.xAxis]]);
+      for (const mark of c.fractionMarks) {
+        out.push([mark.label, mark.positions[c.xAxis] ?? ""]);
+      }
     }
     out.push([]);
   }

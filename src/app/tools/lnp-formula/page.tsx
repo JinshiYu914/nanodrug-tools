@@ -45,6 +45,7 @@ import {
   type LipidEntry,
 } from "@/lib/calculations/lnp-formula";
 import { useUser } from "@/lib/supabase/use-user";
+import { PERSONAL_SCOPE, scopeKey, type DataScope } from "@/lib/projects/types";
 
 const num = (s: string) => {
   const n = parseFloat(s);
@@ -56,6 +57,7 @@ type TabKey = "normal" | "screening" | "ribogreen";
 export default function LnpFormulaPage() {
   // Controlled so the workflow diagram can be hidden on the RiboGreen tab.
   const [tab, setTab] = useState<TabKey>("normal");
+  const [scope, setScope] = useState<DataScope>(PERSONAL_SCOPE);
 
   // ── Cross-tab links between a screening formulation and its EE record ──
   // Each request carries a token so asking for the same target twice still
@@ -341,6 +343,8 @@ export default function LnpFormulaPage() {
                 title="我的配方"
                 onLoad={loadFormulaData}
                 getCurrentData={getFormulaData}
+                scope={scope}
+                onScopeChange={setScope}
               />
             }
             step2Aside={
@@ -349,6 +353,8 @@ export default function LnpFormulaPage() {
                 title="我的实验参数"
                 onLoad={loadPrepData}
                 getCurrentData={getPrepData}
+                scope={scope}
+                onScopeChange={setScope}
               />
             }
             footerSlot={
@@ -393,12 +399,16 @@ export default function LnpFormulaPage() {
               title="我的配方"
               onLoad={loadFormulaData}
               getCurrentData={getFormulaData}
+              scope={scope}
+              onScopeChange={setScope}
             />
             <LnpSavedPanel
               type="preparation"
               title="我的实验参数"
               onLoad={loadPrepData}
               getCurrentData={getPrepData}
+              scope={scope}
+              onScopeChange={setScope}
             />
           </div>
         </TabsContent>
@@ -433,6 +443,9 @@ export default function LnpFormulaPage() {
             </Card>
           ) : (
             <ScreeningMode
+              key={scopeKey(scope)}
+              scope={scope}
+              onScopeChange={setScope}
               focus={screeningFocus}
               onFocusHandled={() => setScreeningFocus(null)}
               onOpenRibogreenRecord={openRibogreenRecord}
@@ -446,6 +459,9 @@ export default function LnpFormulaPage() {
         <TabsContent value="ribogreen" className="space-y-0" forceMount>
           <div className={tab === "ribogreen" ? "" : "hidden"}>
             <RibogreenMode
+              key={scopeKey(scope)}
+              scope={scope}
+              onScopeChange={setScope}
               active={tab === "ribogreen"}
               onOpenFormulation={openFormulation}
               pendingRecord={ribogreenRecord}

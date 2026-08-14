@@ -26,26 +26,18 @@ export default function AssistantPage() {
           AI Assistant
         </h1>
         <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-          A chat assistant for formulation and delivery questions — the kind you
-          would otherwise work out on paper next to the calculators. It will run
-          against this lab&rsquo;s protocols and the same maths the tools use,
-          so an answer and a calculation agree with each other.
+          An assistant for LNP formulation, delivery, and experimental planning
+          is being built. Please check back soon.
         </p>
 
-        <div className="sketch-card mt-10 border-dashed p-6">
-          <p className="font-display text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            Not open yet
-          </p>
+        <div className="mt-10 border-y border-dashed border-ink/20 py-7">
+          <p className="font-display text-lg font-bold">Coming soon</p>
           <p className="mt-2 leading-relaxed text-muted-foreground">
-            Until it is, the calculators do the arithmetic and the research
-            pages cover the background.
+            In the meantime, the calculators and workbenches remain available.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5">
             <Button asChild className="font-semibold shadow-sticker-sm">
               <Link href="/tools">Open Lab Tools</Link>
-            </Button>
-            <Button asChild variant="outline" className="font-semibold">
-              <Link href="/#research">Read the research</Link>
             </Button>
           </div>
         </div>

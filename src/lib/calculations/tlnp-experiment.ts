@@ -31,6 +31,7 @@ import {
   isKnownLipid,
   type LipidEntry,
 } from "./lnp-formula";
+import { parseChromatogramTable } from "./chromatogram";
 import {
   createDefaultMethod,
   describeMethod,
@@ -543,8 +544,13 @@ export interface ChromatogramChannel {
   slot: 1 | 2 | 3 | 4 | 5;
 }
 
+export type ChromatogramXAxis = "min" | "mL" | "CV";
+
 export interface ChromatogramPoint {
   x: number;
+  /** Instrument exports keep all three coordinates so the chart can switch
+   *  axes without estimating one unit from another. */
+  xValues: Partial<Record<ChromatogramXAxis, number>>;
   /** One entry per channel, index-aligned with `channels`. */
   y: (number | null)[];
 }
@@ -556,13 +562,23 @@ export interface ChromatogramFraction {
   label: string;
 }
 
+export interface ChromatogramFractionMark {
+  id: string;
+  label: string;
+  positions: Partial<Record<ChromatogramXAxis, number>>;
+}
+
 export interface Chromatogram {
   id: string;
   name: string;
+  xAxis: ChromatogramXAxis;
+  availableXAxes: ChromatogramXAxis[];
   xLabel: string;
   channels: ChromatogramChannel[];
   points: ChromatogramPoint[];
   fractions: ChromatogramFraction[];
+  fractionMarks: ChromatogramFractionMark[];
+  showFractionMarks: boolean;
   source: "paste" | "csv";
   sourceName: string;
   /** The text that was pasted, kept so the run can be corrected and re-parsed
@@ -1248,6 +1264,18 @@ function systemsFromLegacyGraph(
 
 function parseChromatogram(raw: unknown, index: number): Chromatogram {
   const o = obj(raw);
+  const rawText = str(o.rawText);
+  const xLabel = str(o.xLabel, "体积 (mL)");
+  const inferredXAxis: ChromatogramXAxis = /\bcv\b/i.test(xLabel)
+    ? "CV"
+    : /\bmin\b|分钟|时间/i.test(xLabel)
+      ? "min"
+      : "mL";
+  const xAxis = pick(o.xAxis, ["min", "mL", "CV"] as const, inferredXAxis);
+  const availableXAxes = arr(o.availableXAxes).filter(
+    (axis): axis is ChromatogramXAxis =>
+      axis === "min" || axis === "mL" || axis === "CV"
+  );
   const channels: ChromatogramChannel[] = arr(o.channels).map((c, i) => {
     const co = obj(c);
     const slot = num(co.slot);
@@ -1262,13 +1290,50 @@ function parseChromatogram(raw: unknown, index: number): Chromatogram {
       const po = obj(p);
       const x = num(po.x);
       if (x === null) return null;
-      return { x, y: arr(po.y).map((v) => num(v)) };
+      const xo = obj(po.xValues);
+      const xValues: Partial<Record<ChromatogramXAxis, number>> = {};
+      for (const axis of ["min", "mL", "CV"] as const) {
+        const value = num(xo[axis]);
+        if (value !== null) xValues[axis] = value;
+      }
+      if (Object.keys(xValues).length === 0) xValues[xAxis] = x;
+      return { x: xValues[xAxis] ?? x, xValues, y: arr(po.y).map((v) => num(v)) };
     })
     .filter((p): p is ChromatogramPoint => p !== null);
+  const parsedFractionMarks = arr(o.fractionMarks)
+    .map((mark) => {
+      const mo = obj(mark);
+      const positionsObject = obj(mo.positions);
+      const positions: Partial<Record<ChromatogramXAxis, number>> = {};
+      for (const axis of ["min", "mL", "CV"] as const) {
+        const value = num(positionsObject[axis]);
+        if (value !== null) positions[axis] = value;
+      }
+      if (Object.keys(positions).length === 0) return null;
+      return { id: str(mo.id) || genId(), label: str(mo.label), positions };
+    })
+    .filter((mark): mark is ChromatogramFractionMark => mark !== null);
+  // An earlier two-column importer could treat every UV row in a complete SEC
+  // file as a mark (min became the position and mL became a numeric label).
+  // Drop only that unmistakable high-volume pattern; legitimate fraction IDs
+  // such as 1E06 remain untouched.
+  const numericMarkCount = parsedFractionMarks.filter((mark) => {
+    const label = mark.label.trim();
+    return label !== "" && Number.isFinite(Number(label));
+  }).length;
+  const fractionMarksWereCorrupted = parsedFractionMarks.length > 100 &&
+    numericMarkCount / parsedFractionMarks.length > 0.9;
+  let fractionMarks = fractionMarksWereCorrupted ? [] : parsedFractionMarks;
+  if (fractionMarksWereCorrupted && rawText) {
+    const recoveredMarks = parseChromatogramTable(rawText).fractionMarks;
+    if (recoveredMarks.length > 0) fractionMarks = recoveredMarks;
+  }
   return {
     id: str(o.id) || genId(),
     name: str(o.name, `层析图 ${index + 1}`),
-    xLabel: str(o.xLabel, "体积 (mL)"),
+    xAxis,
+    availableXAxes: availableXAxes.length > 0 ? availableXAxes : [xAxis],
+    xLabel,
     channels,
     points,
     fractions: arr(o.fractions)
@@ -1280,9 +1345,11 @@ function parseChromatogram(raw: unknown, index: number): Chromatogram {
         return { id: str(fo.id) || genId(), from, to, label: str(fo.label) };
       })
       .filter((f): f is ChromatogramFraction => f !== null),
+    fractionMarks,
+    showFractionMarks: o.showFractionMarks !== false,
     source: pick(o.source, ["paste", "csv"] as const, "paste"),
     sourceName: str(o.sourceName),
-    rawText: str(o.rawText),
+    rawText,
     note: str(o.note),
   };
 }

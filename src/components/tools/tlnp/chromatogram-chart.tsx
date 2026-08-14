@@ -1,9 +1,11 @@
 "use client";
 
 import { useId, useMemo } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { fmtTick, ticksOf } from "@/lib/calculations/chart-scale";
 import {
   buildChromatogramPaths,
+  CHROMATOGRAM_AXIS_LABELS,
   channelPeaks,
   chromatogramDomain,
   type PlotBox,
@@ -11,8 +13,8 @@ import {
 import type { Chromatogram } from "@/lib/calculations/tlnp-experiment";
 
 const W = 620;
-const H = 260;
-const PAD = { top: 12, right: 14, bottom: 30, left: 48 };
+const H = 300;
+const PAD = { top: 16, right: 14, bottom: 70, left: 48 };
 const BOX: PlotBox = {
   left: PAD.left,
   top: PAD.top,
@@ -26,9 +28,16 @@ const channelColor = (slot: number) => `var(--chart-${slot})`;
 interface Props {
   chromatogram: Chromatogram;
   className?: string;
+  onToggleFractionMarks?: () => void;
+  onRemoveFractionMark?: (markId: string) => void;
 }
 
-export default function ChromatogramChart({ chromatogram, className }: Props) {
+export default function ChromatogramChart({
+  chromatogram,
+  className,
+  onToggleFractionMarks,
+  onRemoveFractionMark,
+}: Props) {
   const clipId = useId().replace(/:/g, "");
   const domains = useMemo(
     () => chromatogramDomain(chromatogram),
@@ -39,6 +48,12 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
     [chromatogram, domains]
   );
   const peaks = useMemo(() => channelPeaks(chromatogram), [chromatogram]);
+  const visibleMarks = useMemo(
+    () => chromatogram.fractionMarks.filter(
+      (mark) => mark.positions[chromatogram.xAxis] !== undefined
+    ),
+    [chromatogram.fractionMarks, chromatogram.xAxis]
+  );
 
   const sx = (v: number) =>
     BOX.left +
@@ -47,6 +62,14 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
     BOX.top +
     BOX.height -
     ((v - domains.y.lo) / (domains.y.hi - domains.y.lo || 1)) * BOX.height;
+  const markFontSize = visibleMarks.length > 24 ? 5.5 : visibleMarks.length > 12 ? 6.5 : 7.5;
+
+  const removeMark = (markId: string, label: string) => {
+    if (!onRemoveFractionMark) return;
+    if (window.confirm(`删除 Fraction Mark「${label}」？`)) {
+      onRemoveFractionMark(markId);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -134,7 +157,7 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
             <text
               key={`tx${t}`}
               x={sx(t)}
-              y={H - PAD.bottom + 12}
+              y={H - PAD.bottom + 36}
               textAnchor="middle"
             >
               {fmtTick(t)}
@@ -146,7 +169,7 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
             textAnchor="middle"
             fontSize={9}
           >
-            {chromatogram.xLabel}
+            {CHROMATOGRAM_AXIS_LABELS[chromatogram.xAxis]}
           </text>
           <text
             x={-(BOX.top + BOX.height / 2)}
@@ -155,7 +178,7 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
             fontSize={9}
             transform="rotate(-90)"
           >
-            吸光度
+            Absorbance (mAU)
           </text>
         </g>
 
@@ -170,6 +193,59 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
             ) : null
           )}
         </g>
+
+        {chromatogram.showFractionMarks && (
+          <g className="text-primary" fill="currentColor">
+            {visibleMarks.map((mark) => {
+              const value = mark.positions[chromatogram.xAxis]!;
+              const x = sx(value);
+              if (x < BOX.left || x > BOX.left + BOX.width) return null;
+              const axisY = BOX.top + BOX.height;
+              const nearRightEdge = x > BOX.left + BOX.width - 40;
+              const labelX = x + (nearRightEdge ? -3 : 3);
+              const labelY = axisY + 9;
+              const labelAngle = nearRightEdge ? -58 : 58;
+              return (
+                <g
+                  key={mark.id}
+                  role={onRemoveFractionMark ? "button" : undefined}
+                  tabIndex={onRemoveFractionMark ? 0 : undefined}
+                  aria-label={onRemoveFractionMark ? `删除 Fraction Mark ${mark.label}` : undefined}
+                  className={onRemoveFractionMark ? "cursor-pointer outline-none hover:text-destructive focus:text-destructive" : undefined}
+                  onClick={() => removeMark(mark.id, mark.label)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      removeMark(mark.id, mark.label);
+                    }
+                  }}
+                >
+                  <title>{onRemoveFractionMark ? `${mark.label} · 点击删除` : mark.label}</title>
+                  <line
+                    x1={x}
+                    x2={x}
+                    y1={BOX.top}
+                    y2={axisY}
+                    stroke="currentColor"
+                    strokeWidth={0.8}
+                    strokeDasharray="3 3"
+                    opacity={0.5}
+                  />
+                  <circle cx={x} cy={axisY} r={2.4} />
+                  <text
+                    x={labelX}
+                    y={labelY}
+                    fontSize={markFontSize}
+                    textAnchor={nearRightEdge ? "end" : "start"}
+                    transform={`rotate(${labelAngle} ${labelX} ${labelY})`}
+                  >
+                    {mark.label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
 
         {domains.empty && (
           <text
@@ -200,6 +276,18 @@ export default function ChromatogramChart({ chromatogram, className }: Props) {
             )}
           </span>
         ))}
+        {visibleMarks.length > 0 && (
+          <button
+            type="button"
+            onClick={onToggleFractionMarks}
+            disabled={!onToggleFractionMarks}
+            aria-pressed={chromatogram.showFractionMarks}
+            className="flex items-center gap-1.5 text-xs transition-colors hover:text-foreground disabled:cursor-default"
+          >
+            {chromatogram.showFractionMarks ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {chromatogram.showFractionMarks ? "隐藏" : "显示"} Fraction Mark（{visibleMarks.length}）
+          </button>
+        )}
       </div>
     </div>
   );

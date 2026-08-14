@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   ChevronDown,
@@ -56,6 +56,9 @@ import {
 } from "@/lib/calculations/tlnp-experiment";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
 import { listSyncedWorkbenchItems } from "@/lib/supabase/workbench-cache";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
+import CopyScopeAction from "@/components/projects/copy-scope-action";
+import DataScopePicker from "@/components/projects/data-scope-picker";
 
 const MIGRATION = "004_tlnp_experiment.sql";
 
@@ -79,6 +82,8 @@ interface Props {
   onBatchDeleted: (id: string) => void;
   /** Bumped by the parent after an autosave so updated_at re-reads. */
   refreshToken?: number;
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
 }
 
 /**
@@ -92,7 +97,10 @@ export default function BatchSidebar({
   onSelectBatch,
   onBatchDeleted,
   refreshToken,
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
 }: Props) {
+  const writable = canEditScope(scope);
   const [items, setItems] = useState<LnpSavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -104,14 +112,14 @@ export default function BatchSidebar({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listSyncedWorkbenchItems(userId, "tlnp_experiment"));
+      setItems(await listSyncedWorkbenchItems(userId, "tlnp_experiment", scope));
     } catch (e) {
       console.error(e);
       toast.error(describeError(e, MIGRATION));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [scope, userId]);
 
   useEffect(() => {
     void reload();
@@ -138,7 +146,7 @@ export default function BatchSidebar({
         name,
         data: serializeTlnpExperiment(emptyTlnpExperiment()),
         sort_order: 0,
-      });
+      }, scope);
       await reload();
       onSelectBatch(row);
       toast.success(`已创建批次：${name}`);
@@ -157,7 +165,7 @@ export default function BatchSidebar({
         name,
         data: null,
         sort_order: 0,
-      });
+      }, scope);
       await reload();
       toast.success("文件夹已创建");
     } catch (e) {
@@ -224,8 +232,20 @@ export default function BatchSidebar({
       <Card className="lg:sticky lg:top-20">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm font-semibold">我的实验批次</CardTitle>
-            <div className="flex items-center gap-1">
+            <CardTitle className="min-w-0 text-sm font-semibold">
+              {onScopeChange ? (
+                <Suspense fallback={<span>我的实验批次</span>}>
+                  <DataScopePicker
+                    value={scope}
+                    onChange={onScopeChange}
+                    resetParams={["batch", "import"]}
+                    compact
+                    personalLabel="我的实验批次"
+                  />
+                </Suspense>
+              ) : "我的实验批次"}
+            </CardTitle>
+            {writable && <div className="flex items-center gap-1">
               <Button
                 size="icon"
                 variant="ghost"
@@ -244,7 +264,7 @@ export default function BatchSidebar({
               >
                 <Plus className="h-4 w-4" />
               </Button>
-            </div>
+            </div>}
           </div>
         </CardHeader>
         <CardContent className="max-h-[calc(100vh-12rem)] space-y-0.5 overflow-y-auto pt-0">
@@ -279,13 +299,14 @@ export default function BatchSidebar({
                 onMove={setMoveTarget}
                 onDuplicate={handleDuplicate}
                 onDelete={handleDelete}
+                writable={writable}
               />
             ))
           )}
         </CardContent>
       </Card>
 
-      <NewItemDialog
+      {writable && <NewItemDialog
         open={newBatchOpen}
         onOpenChange={setNewBatchOpen}
         title="新建实验批次"
@@ -293,9 +314,9 @@ export default function BatchSidebar({
         placeholder="例如：tLNP-CD3-20260806"
         folders={folders}
         onSubmit={createBatch}
-      />
+      />}
 
-      <NewItemDialog
+      {writable && <NewItemDialog
         open={newFolderOpen}
         onOpenChange={setNewFolderOpen}
         title="新建文件夹"
@@ -303,7 +324,7 @@ export default function BatchSidebar({
         placeholder="文件夹名"
         folders={folders}
         onSubmit={createFolder}
-      />
+      />}
 
       {moveTarget && (
         <MoveDialog
@@ -338,6 +359,7 @@ interface TreeRowProps {
   onMove: (item: LnpSavedItem) => void;
   onDuplicate: (item: LnpSavedItem) => void;
   onDelete: (item: LnpSavedItem) => void;
+  writable: boolean;
 }
 
 function TreeRow({
@@ -351,6 +373,7 @@ function TreeRow({
   onMove,
   onDuplicate,
   onDelete,
+  writable,
 }: TreeRowProps) {
   const isOpen = expanded.has(node.id);
   const isActive = !node.is_folder && node.id === activeBatchId;
@@ -399,7 +422,8 @@ function TreeRow({
           )}
         </button>
 
-        <DropdownMenu>
+        {!node.is_folder && <span className="opacity-0 group-hover:opacity-100"><CopyScopeAction item={node} compact /></span>}
+        {writable && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               className="shrink-0 p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground data-[state=open]:opacity-100"
@@ -432,7 +456,7 @@ function TreeRow({
               删除
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
       </div>
 
       {node.is_folder &&
@@ -450,6 +474,7 @@ function TreeRow({
             onMove={onMove}
             onDuplicate={onDuplicate}
             onDelete={onDelete}
+            writable={writable}
           />
         ))}
     </>

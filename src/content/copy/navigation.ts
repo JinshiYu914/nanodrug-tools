@@ -18,7 +18,7 @@ export type NavLink = {
 /** Top-level navigation. Lab Tools renders as a dropdown, not a plain link. */
 export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Home" },
-  { href: "/progress", label: "Research Progress" },
+  { href: "/progress", label: "Research Updates" },
   { href: "/assistant", label: "AI Assistant" },
   { href: "/tools", label: "Lab Tools" },
 ];
@@ -104,7 +104,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
     heading: "Research",
     links: [
       { href: "/#research", label: "Research interests" },
-      { href: "/progress", label: "Weekly progress" },
+      { href: "/progress", label: "Research updates" },
     ],
   },
   {

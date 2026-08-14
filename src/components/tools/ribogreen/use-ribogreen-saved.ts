@@ -10,6 +10,7 @@ import {
   type LnpSavedItem,
   type LnpItemType,
 } from "@/lib/supabase/lnp-service";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 /**
  * Supabase surfaces failures as PostgrestError — a plain object, not an Error
@@ -44,7 +45,8 @@ export function describeError(
 
 export function useRibogreenSaved(
   type: Extract<LnpItemType, "ribogreen_curve" | "ribogreen_result">,
-  refreshToken?: number
+  refreshToken?: number,
+  scope: DataScope = PERSONAL_SCOPE
 ) {
   const { user, loading: authLoading } = useUser();
   const userId = user?.id ?? null;
@@ -54,14 +56,14 @@ export function useRibogreenSaved(
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listAllItems(type));
+      setItems(await listAllItems(type, scope));
     } catch (e) {
       console.error(e);
       toast.error(describeError(e));
     } finally {
       setLoading(false);
     }
-  }, [type]);
+  }, [scope, type]);
 
   // Load once the user is known, and again whenever the parent bumps
   // refreshToken after saving through the service directly.

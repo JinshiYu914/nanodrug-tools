@@ -44,6 +44,7 @@ import BatchCompare from "./batch-compare";
 import { useTlnpBatch } from "./use-tlnp-batch";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
 
 const MODULE_KEYS: ModuleKey[] = ["1", "2", "3", "4", "report", "compare"];
 
@@ -54,6 +55,7 @@ function parseModule(raw: string | null): ModuleKey {
 export default function TlnpWorkbench() {
   const { user, loading: authLoading } = useUser();
   const authed: boolean | null = authLoading ? null : !!user;
+  const [scope, setScope] = useState<DataScope>(PERSONAL_SCOPE);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -62,13 +64,15 @@ export default function TlnpWorkbench() {
   const batchParam = searchParams.get("batch");
   const moduleParam = parseModule(searchParams.get("m"));
 
-  const cloud = useTlnpBatch(user?.id ?? null);
+  const cloud = useTlnpBatch(user?.id ?? null, scope);
   const [demoData, setDemoData] = useState(createTlnpDemoExperiment);
   const guest = authed === false;
   const demoBatch = useMemo<LnpSavedItem>(
     () => ({
       id: "tlnp-public-demo",
       user_id: "guest",
+      project_id: null,
+      last_modified_by: null,
       type: "tlnp_experiment",
       is_folder: false,
       parent_id: null,
@@ -91,7 +95,7 @@ export default function TlnpWorkbench() {
     },
     [cloudUpdate, guest]
   );
-  const { select, clear, lastSavedAt, refreshToken, syncState } = cloud;
+  const { select, clear, lastSavedAt, refreshToken, syncState, saveDraftToPersonal } = cloud;
 
   // The URL is the source of truth for which batch is open, so a link from the
   // RiboGreen grid — or a refresh — lands on the right one.
@@ -108,7 +112,7 @@ export default function TlnpWorkbench() {
     setRestoring(true);
     void (async () => {
       try {
-        const rows = await listSyncedWorkbenchItems(user!.id, "tlnp_experiment");
+        const rows = await listSyncedWorkbenchItems(user!.id, "tlnp_experiment", scope);
         if (cancelled) return;
         const hit = rows.find((r) => r.id === batchParam && !r.is_folder);
         if (hit) select(hit);
@@ -130,16 +134,17 @@ export default function TlnpWorkbench() {
       // with ?batch= already in the URL.
       if (restoreAttempted.current === batchParam) restoreAttempted.current = null;
     };
-  }, [authed, batchParam, batch?.id, select, user]);
+  }, [authed, batchParam, batch?.id, scope, select, user]);
 
   const writeUrl = useCallback(
     (batchId: string | null, module: ModuleKey) => {
       const params = new URLSearchParams();
       if (batchId) params.set("batch", batchId);
       params.set("m", module);
+      if (scope.kind === "project") params.set("project", scope.projectId);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [pathname, router]
+    [pathname, router, scope]
   );
 
   // ── Coming back from the RiboGreen calculator ──
@@ -164,6 +169,10 @@ export default function TlnpWorkbench() {
         if (cancelled) return;
         if (!record) {
           toast.error("找不到这条 RiboGreen 记录");
+          return;
+        }
+        if (record.project_id !== batch.project_id) {
+          toast.error("RiboGreen 记录与 tLNP 批次不属于同一数据空间");
           return;
         }
 
@@ -286,6 +295,8 @@ export default function TlnpWorkbench() {
           <p className="mt-1 text-xs text-muted-foreground">你可以修改四个模块、查看图表并导出报告；所有修改只存在于当前页面，刷新后会重置。</p>
         </div>
       )}
+      {!guest && !canEditScope(scope) && <div className="mb-5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">当前为只读成员权限：可查看与导出，不能修改课题数据。需要个人副本时，请在批次列表使用“复制到我的数据”。</div>}
+      {!guest && scope.kind === "project" && syncState === "error" && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm"><span className="min-w-0 flex-1">课题权限或状态已变化，本机草稿尚未写入云端。</span><Button size="sm" variant="outline" onClick={() => void saveDraftToPersonal()}>另存到我的数据</Button></div>}
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <aside>
           {guest ? (
@@ -300,6 +311,8 @@ export default function TlnpWorkbench() {
               onSelectBatch={handleSelectBatch}
               onBatchDeleted={handleBatchDeleted}
               refreshToken={refreshToken}
+              scope={scope}
+              onScopeChange={(next) => { clear(); setScope(next); }}
             />
           )}
         </aside>
@@ -358,6 +371,7 @@ export default function TlnpWorkbench() {
                   createdAt={batch.created_at}
                   updatedAt={batch.updated_at}
                   cloudEnabled={!guest}
+                  scope={scope}
                 />
               ) : moduleParam === "2" ? (
                 <ModuleConjugation data={data} update={update} cloudEnabled={!guest} />
@@ -367,6 +381,7 @@ export default function TlnpWorkbench() {
                   update={update}
                   batchId={batch.id}
                   cloudEnabled={!guest}
+                  scope={scope}
                 />
               ) : moduleParam === "4" ? (
                 <ModuleAssay data={data} update={update} />
@@ -380,7 +395,7 @@ export default function TlnpWorkbench() {
               ) : guest ? (
                 <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><LogIn className="h-4 w-4 text-primary" />跨批次对比需要登录</CardTitle><CardDescription>示例模式只有一个临时批次，不会读取任何用户云端记录。</CardDescription></CardHeader><CardContent><Link href="/login"><Button>前往登录</Button></Link></CardContent></Card>
               ) : (
-                <BatchCompare activeBatchId={batch.id} />
+                <BatchCompare activeBatchId={batch.id} scope={scope} />
               )}
             </>
           )}

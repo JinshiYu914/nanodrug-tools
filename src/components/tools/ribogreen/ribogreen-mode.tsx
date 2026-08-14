@@ -65,12 +65,15 @@ import {
   updateItemData,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
+import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
 
 // Server renders "", the client renders today's date. Doing this through
 // useSyncExternalStore keeps hydration honest without a setState-in-effect.
 const noopSubscribe = () => () => {};
 
 interface RibogreenModeProps {
+  scope?: DataScope;
+  onScopeChange?: (scope: DataScope) => void;
   active: boolean;
   /** Jump to the screening tab and focus the formulation a sample came from. */
   onOpenFormulation?: (sessionId: string, formulationId: string) => void;
@@ -82,6 +85,8 @@ interface RibogreenModeProps {
 }
 
 export default function RibogreenMode({
+  scope = PERSONAL_SCOPE,
+  onScopeChange,
   active,
   onOpenFormulation,
   pendingRecord,
@@ -96,6 +101,12 @@ export default function RibogreenMode({
   const everActiveRef = useRef(false);
   if (active) everActiveRef.current = true;
   const showRecords = everActiveRef.current;
+  const handoffScopeMatches = !tlnpHandoff || (
+    tlnpHandoff.projectId
+      ? scope.kind === "project" && scope.projectId === tlnpHandoff.projectId
+      : scope.kind === "personal"
+  );
+  const writable = canEditScope(scope) && handoffScopeMatches;
 
   const [instrument, setInstrument] = useState<InstrumentKey>("thermo");
   const [curveExpanded, setCurveExpanded] = useState(false);
@@ -118,6 +129,7 @@ export default function RibogreenMode({
     batchId: string;
     batchName: string;
     stage: TlnpHandoff["stage"];
+    projectId?: string;
     count: number;
   } | null>(null);
   const [returning, setReturning] = useState(false);
@@ -218,6 +230,11 @@ export default function RibogreenMode({
           toast.error("找不到该 tLNP 批次");
           return;
         }
+        const expectedProject = tlnpHandoff.projectId ?? null;
+        if (item.project_id !== expectedProject) {
+          toast.error("tLNP 批次与当前数据归属不一致，已停止跨空间联动");
+          return;
+        }
         const parsed = parseTlnpExperiment(item.data);
         const targets =
           tlnpHandoff.stage === "purify"
@@ -255,6 +272,7 @@ export default function RibogreenMode({
           batchId: item.id,
           batchName: item.name,
           stage: tlnpHandoff.stage,
+          projectId: tlnpHandoff.projectId,
           count: targets.length,
         });
         toast.success(`已载入「${item.name}」的 ${targets.length} 个样品名`);
@@ -299,13 +317,13 @@ export default function RibogreenMode({
           name,
           data: payload,
           sort_order: 0,
-        });
+        }, scope);
         recordId = row.id;
         setActiveResultId(row.id);
         setActiveResultName(name);
       }
       setRecordsRefresh((n) => n + 1);
-      router.push(returnUrl(handoff.batchId, handoff.stage, recordId));
+      router.push(returnUrl(handoff.batchId, handoff.stage, recordId, handoff.projectId));
     } catch (e) {
       console.error(e);
       toast.error(describeError(e));
@@ -381,7 +399,7 @@ export default function RibogreenMode({
           name,
           data,
           sort_order: 0,
-        });
+        }, scope);
         setActiveResultId(row.id);
         toast.success("实验记录已保存");
       }
@@ -416,7 +434,7 @@ export default function RibogreenMode({
             <Button
               className="gap-2"
               onClick={() => void handleReturnToTlnp()}
-              disabled={returning}
+              disabled={returning || !writable}
             >
               <ArrowLeftRight className="h-4 w-4" />
               {returning ? "保存中..." : "导入结果并返回 tLNP 工作台"}
@@ -493,9 +511,10 @@ export default function RibogreenMode({
             onCorrectionChange={setCorrection}
             onShowCorrectedChange={setShowCorrected}
             onReset={handleReset}
-            onSave={openSaveDialog}
+            onSave={writable ? openSaveDialog : () => toast.info("当前课题为只读权限")}
             onExportXlsx={handleExportXlsx}
             onOpenFormulation={onOpenFormulation}
+            scope={scope}
           />
         </CardContent>
       </Card>
@@ -506,6 +525,11 @@ export default function RibogreenMode({
         refreshToken={recordsRefresh}
         activeItemId={activeResultId}
         onLoad={applyRecord}
+        scope={scope}
+        onScopeChange={(next) => {
+          setActiveResultId(null);
+          onScopeChange?.(next);
+        }}
       />
       )}
 

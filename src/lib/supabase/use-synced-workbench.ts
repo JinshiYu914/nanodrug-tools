@@ -21,6 +21,7 @@ import {
   type WorkbenchCacheEntry,
 } from "./workbench-cache";
 import { decideCloudLoad } from "./sync-policy";
+import { PERSONAL_SCOPE, canEditScope, scopeKey, type DataScope } from "@/lib/projects/types";
 
 export type WorkbenchSyncState =
   | "idle"
@@ -29,6 +30,7 @@ export type WorkbenchSyncState =
   | "saving"
   | "local-draft"
   | "conflict-copy"
+  | "personal-copy"
   | "error";
 
 interface Pending<T> {
@@ -46,6 +48,7 @@ interface Options<T> {
   serialize: (data: T) => Record<string, unknown>;
   autosaveDelay?: number;
   migration: string;
+  scope?: DataScope;
 }
 
 export interface SyncedWorkbenchState<T> {
@@ -58,6 +61,7 @@ export interface SyncedWorkbenchState<T> {
   saving: boolean;
   lastSavedAt: Date | null;
   refreshToken: number;
+  saveDraftToPersonal: () => Promise<LnpSavedItem | null>;
 }
 
 function conflictName(name: string): string {
@@ -87,12 +91,14 @@ export function useSyncedWorkbench<T>({
   serialize,
   autosaveDelay = 800,
   migration,
+  scope = PERSONAL_SCOPE,
 }: Options<T>): SyncedWorkbenchState<T> {
   const [item, setItem] = useState<LnpSavedItem | null>(null);
   const [data, setData] = useState<T>(empty);
   const [syncState, setSyncState] = useState<WorkbenchSyncState>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const writable = canEditScope(scope);
 
   const itemRef = useRef<LnpSavedItem | null>(null);
   const dataRef = useRef<T>(data);
@@ -117,12 +123,13 @@ export function useSyncedWorkbench<T>({
           baseRevision,
           dirty,
           localUpdatedAt: new Date().toISOString(),
-        });
+          scopeKey: scopeKey(scope),
+        }, scope);
       } catch (error) {
         console.warn(`[${type}] 本机草稿缓存失败`, error);
       }
     },
-    [serialize, type, userId]
+    [scope, serialize, type, userId]
   );
 
   const adopt = useCallback(
@@ -152,29 +159,29 @@ export function useSyncedWorkbench<T>({
         sort_order: latest.item.sort_order + 1,
       } as const;
       try {
-        copy = await createItem({ ...base, parent_id: latest.item.parent_id });
+        copy = await createItem({ ...base, parent_id: latest.item.parent_id }, scope);
       } catch (error) {
         // A remotely deleted parent should not prevent rescue of the record.
         const code = (error as { code?: string })?.code;
         if (code !== "23503") throw error;
-        copy = await createItem({ ...base, parent_id: null });
+        copy = await createItem({ ...base, parent_id: null }, scope);
       }
 
       pendingRef.current = null;
-      await deleteWorkbenchCache(userId, type, latest.item.id).catch(() => undefined);
+      await deleteWorkbenchCache(userId, type, latest.item.id, scope).catch(() => undefined);
       await cache(copy, latest.data, revisionOf(copy), false);
       adopt(copy, latest.data, "conflict-copy");
       setLastSavedAt(new Date(copy.updated_at));
       setRefreshToken((value) => value + 1);
       toast.warning(`云端已有新版本，本机内容已保留为「${copy.name}」`);
     },
-    [adopt, cache, serialize, type, userId]
+    [adopt, cache, scope, serialize, type, userId]
   );
 
   const flush = useCallback(async () => {
     if (inFlightRef.current) return inFlightRef.current;
     const attempt = pendingRef.current;
-    if (!attempt || !userId) return;
+    if (!attempt || !userId || !writable) return;
 
     const task = (async () => {
       setSyncState("saving");
@@ -237,7 +244,7 @@ export function useSyncedWorkbench<T>({
     })();
     inFlightRef.current = task;
     return task;
-  }, [autosaveDelay, cache, migration, preserveConflict, serialize, type, userId]);
+  }, [autosaveDelay, cache, migration, preserveConflict, serialize, type, userId, writable]);
 
   flushRef.current = flush;
 
@@ -247,7 +254,7 @@ export function useSyncedWorkbench<T>({
     if (!editRequestedRef.current) return;
     editRequestedRef.current = false;
     const current = itemRef.current;
-    if (!current || !userId) return;
+    if (!current || !userId || !writable) return;
     const token = ++editTokenRef.current;
     const baseRevision = pendingRef.current?.baseRevision ?? revisionOf(current);
     pendingRef.current = { item: current, data, baseRevision, token };
@@ -255,7 +262,7 @@ export function useSyncedWorkbench<T>({
     setSyncState("local-draft");
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => void flushRef.current(), autosaveDelay);
-  }, [autosaveDelay, cache, data, userId]);
+  }, [autosaveDelay, cache, data, userId, writable]);
 
   const select = useCallback(
     (candidate: LnpSavedItem) => {
@@ -269,7 +276,7 @@ export function useSyncedWorkbench<T>({
         try {
           cloud = await getItem(candidate.id);
         } catch {
-          const cached = await getWorkbenchCache(userId, type, candidate.id).catch(() => null);
+          const cached = await getWorkbenchCache(userId, type, candidate.id, scope).catch(() => null);
           if (requestToken !== selectTokenRef.current) return;
           if (!cached) {
             setSyncState("error");
@@ -291,7 +298,7 @@ export function useSyncedWorkbench<T>({
 
         if (requestToken !== selectTokenRef.current) return;
         if (!cloud) {
-          const cached = await getWorkbenchCache(userId, type, candidate.id).catch(() => null);
+          const cached = await getWorkbenchCache(userId, type, candidate.id, scope).catch(() => null);
           if (cached?.dirty) {
             const draft = parse(cached.data);
             const pending: Pending<T> = {
@@ -308,14 +315,14 @@ export function useSyncedWorkbench<T>({
               console.warn(`[${type}] 已删除记录的草稿救援失败`, error);
             }
           } else {
-            await deleteWorkbenchCache(userId, type, candidate.id).catch(() => undefined);
+            await deleteWorkbenchCache(userId, type, candidate.id, scope).catch(() => undefined);
             setSyncState("error");
             toast.error("该记录已被删除");
           }
           return;
         }
 
-        const cached = await getWorkbenchCache(userId, type, cloud.id).catch(() => null);
+        const cached = await getWorkbenchCache(userId, type, cloud.id, scope).catch(() => null);
         if (requestToken !== selectTokenRef.current) return;
         const decision = decideCloudLoad(cached, revisionOf(cloud));
         if (decision !== "use-cloud" && cached) {
@@ -349,17 +356,18 @@ export function useSyncedWorkbench<T>({
         await cache(cloud, value, revisionOf(cloud), false);
       })();
     },
-    [adopt, cache, parse, preserveConflict, type, userId]
+    [adopt, cache, parse, preserveConflict, scope, type, userId]
   );
 
   const update = useCallback((updater: (previous: T) => T) => {
+    if (!writable) return;
     editRequestedRef.current = true;
     setData((previous) => {
       const next = updater(previous);
       dataRef.current = next;
       return next;
     });
-  }, []);
+  }, [writable]);
 
   const clear = useCallback(() => {
     selectTokenRef.current += 1;
@@ -372,17 +380,35 @@ export function useSyncedWorkbench<T>({
     setLastSavedAt(null);
   }, [empty]);
 
+  const saveDraftToPersonal = useCallback(async () => {
+    const current = itemRef.current;
+    if (!current || !userId || scope.kind !== "project") return null;
+    const copy = await createItem({
+      type,
+      is_folder: false,
+      parent_id: null,
+      name: `${current.name}（个人草稿）`,
+      data: serialize(dataRef.current),
+      sort_order: current.sort_order + 1,
+    }, PERSONAL_SCOPE);
+    pendingRef.current = null;
+    await deleteWorkbenchCache(userId, type, current.id, scope).catch(() => undefined);
+    setSyncState("personal-copy");
+    toast.success(`本机内容已保存到「我的数据 / ${copy.name}」`);
+    return copy;
+  }, [scope, serialize, type, userId]);
+
   // Warm the per-user cache from the cloud. A dirty entry is never replaced.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    void listAllItems(type)
-      .then((rows) => (cancelled ? undefined : cacheCloudItems(userId, type, rows)))
+    void listAllItems(type, scope)
+      .then((rows) => (cancelled ? undefined : cacheCloudItems(userId, type, rows, scope)))
       .catch((error) => console.warn(`[${type}] 云端预取失败`, error));
     return () => {
       cancelled = true;
     };
-  }, [type, userId]);
+  }, [scope, type, userId]);
 
   // Realtime handles remote inserts/updates; focus refresh covers deletes and
   // browsers where the Realtime publication is temporarily unavailable.
@@ -390,10 +416,12 @@ export function useSyncedWorkbench<T>({
     if (!userId) return;
     const supabase = createClient();
     const channel = supabase
-      .channel(`workbench:${type}:${userId}`)
+      .channel(`workbench:${type}:${userId}:${scopeKey(scope)}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "lnp_saved_items", filter: `user_id=eq.${userId}` },
+        scope.kind === "personal"
+          ? { event: "*", schema: "public", table: "lnp_saved_items", filter: `user_id=eq.${userId}` }
+          : { event: "*", schema: "public", table: "lnp_saved_items", filter: `project_id=eq.${scope.projectId}` },
         (payload) => {
           const remote = payload.new as unknown as LnpSavedItem;
           if (!remote || remote.type !== type) return;
@@ -415,7 +443,7 @@ export function useSyncedWorkbench<T>({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [adopt, cache, parse, type, userId]);
+  }, [adopt, cache, parse, scope, type, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -471,6 +499,7 @@ export function useSyncedWorkbench<T>({
     saving: syncState === "saving" || syncState === "pulling",
     lastSavedAt,
     refreshToken,
+    saveDraftToPersonal,
   };
 }
 

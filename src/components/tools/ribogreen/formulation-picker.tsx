@@ -21,6 +21,7 @@ import {
 } from "@/lib/calculations/lnp-bench";
 import { parseTlnpExperiment } from "@/lib/calculations/tlnp-experiment";
 import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 /** Which kind of saved row the formulations are being read out of. */
 type SourceKind = "screening_session" | "tlnp_experiment";
@@ -51,6 +52,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** Replaces the sample columns' names, or appends new columns. */
   onPick: (picks: PickedFormulation[], mode: "replace" | "append") => void;
+  scope?: DataScope;
 }
 
 /**
@@ -64,6 +66,7 @@ export default function FormulationPicker({
   open,
   onOpenChange,
   onPick,
+  scope = PERSONAL_SCOPE,
 }: Props) {
   const [source, setSource] = useState<SourceKind>("screening_session");
   const [sessions, setSessions] = useState<LnpSavedItem[]>([]);
@@ -76,7 +79,7 @@ export default function FormulationPicker({
   const load = useCallback(async (kind: SourceKind) => {
     setLoading(true);
     try {
-      const rows = await listAllItems(kind);
+      const rows = await listAllItems(kind, scope);
       const real = rows.filter((r) => !r.is_folder);
       setSessions(real);
       setSessionId((prev) =>
@@ -93,7 +96,7 @@ export default function FormulationPicker({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   // Fetch on first open of each source — the list rarely changes mid-plate-read,
   // and a refresh button covers the case where it does.

@@ -46,7 +46,7 @@ export default function Home() {
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <Button asChild className="gap-2 font-semibold shadow-sticker-sm">
                   <Link href="/progress">
-                    Research progress <ArrowRight className="size-4" />
+                    Research updates <ArrowRight className="size-4" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="font-semibold">
@@ -60,26 +60,82 @@ export default function Home() {
 
       <ResearchInterests />
 
-      {/* Bench tools — deliberately last. They support the research; they are
-          not what the site is about. */}
+      {/* Purpose-built LNP–RNA tools — deliberately last, after the research route. */}
       <section className="border-t border-ink/12 bg-secondary/40 py-16 sm:py-20">
-        <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
-              Calculators from the bench
-            </h2>
-            <p className="mt-2 max-w-lg leading-relaxed text-muted-foreground">
-              LNP formulation, batch screening, RiboGreen encapsulation — plus
-              the everyday molarity and dilution maths.
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="grid gap-6 border-b border-ink/15 pb-8 md:grid-cols-[1fr_1.25fr] md:items-end">
+            <div>
+              <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                LNP–RNA work assistant
+              </p>
+              <h2 className="mt-3 max-w-lg font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                Design, calculate, and document the workflow.
+              </h2>
+            </div>
+            <p className="max-w-xl leading-relaxed text-muted-foreground md:justify-self-end">
+              Practical tools for formulation design, experimental planning,
+              measurement, and traceable LNP–RNA records.
             </p>
           </div>
-          <Button asChild size="lg" className="shrink-0 gap-2 font-semibold shadow-sticker-sm">
-            <Link href="/tools">
-              Open Lab Tools <ArrowRight className="size-4" />
-            </Link>
-          </Button>
+
+          <div className="divide-y divide-ink/15">
+            <ToolRow
+              index="01"
+              href="/tools/lnp-formula"
+              title="LNP Calculator"
+              scope="Formulation · Screening · RiboGreen"
+              description="Design lipid formulations, compare screening batches, and calculate RNA concentration and encapsulation efficiency."
+            />
+            <ToolRow
+              index="02"
+              href="/tools/tlnp"
+              title="tLNP Workbench"
+              scope="Design · Conjugation · Purification · In vitro / in vivo"
+              description="Record the complete targeted-LNP workflow, from formulation and conjugation to purification and biological studies."
+            />
+            <ToolRow
+              index="03"
+              href="/tools/ivt"
+              title="IVT mRNA Workbench"
+              scope="IVT batches · RNA library · Experimental records"
+              description="Track IVT batches and maintain a searchable mRNA library for downstream LNP studies."
+            />
+          </div>
         </div>
       </section>
     </div>
+  );
+}
+
+function ToolRow({
+  index,
+  href,
+  title,
+  scope,
+  description,
+}: {
+  index: string;
+  href: string;
+  title: string;
+  scope: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group grid gap-3 py-7 transition-colors hover:text-primary sm:grid-cols-[3rem_1fr] md:grid-cols-[3rem_14rem_1fr_auto] md:items-center"
+    >
+      <span className="font-mono text-xs text-muted-foreground">{index}</span>
+      <div>
+        <h3 className="font-display text-xl font-bold tracking-tight">{title}</h3>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {scope}
+        </p>
+      </div>
+      <p className="max-w-xl text-sm leading-relaxed text-muted-foreground group-hover:text-foreground">
+        {description}
+      </p>
+      <ArrowRight className="hidden size-5 transition-transform group-hover:translate-x-1 md:block" />
+    </Link>
   );
 }

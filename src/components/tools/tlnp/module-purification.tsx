@@ -36,6 +36,7 @@ import { systemName } from "@/lib/calculations/tlnp-conjugation";
 import {
   createChromatogram,
   reparseChromatogram,
+  setChromatogramXAxis,
   type ParsedChromatogram,
 } from "@/lib/calculations/chromatogram";
 import {
@@ -47,6 +48,7 @@ import {
   type TlnpExperimentData,
   type TlnpPurificationModule,
 } from "@/lib/calculations/tlnp-experiment";
+import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const METHODS: Exclude<PurificationMethod, "">[] = [
   "cl4b",
@@ -59,14 +61,15 @@ interface Props {
   update: (updater: (prev: TlnpExperimentData) => TlnpExperimentData) => void;
   batchId: string;
   cloudEnabled: boolean;
+  scope?: DataScope;
 }
 
-export default function ModulePurification({ data, update, batchId, cloudEnabled }: Props) {
+export default function ModulePurification({ data, update, batchId, cloudEnabled, scope = PERSONAL_SCOPE }: Props) {
   const [adding, setAdding] = useState(false);
   const pur = data.purification;
   const systems = data.conjugation.systems;
 
-  const { records, loading, reload } = useRibogreenRecords(cloudEnabled && systems.length > 0);
+  const { records, loading, reload } = useRibogreenRecords(cloudEnabled && systems.length > 0, scope);
 
   const setPur = (patch: (p: TlnpPurificationModule) => TlnpPurificationModule) =>
     update((prev) => ({ ...prev, purification: patch(prev.purification) }));
@@ -337,7 +340,8 @@ export default function ModulePurification({ data, update, batchId, cloudEnabled
         <CardHeader>
           <CardTitle className="text-base">层析结果</CardTitle>
           <CardDescription>
-            粘贴纯化数据自动生成峰图。收集峰段可以标出来，会画在图上，也会进导出的 PDF。
+            导入 Excel / CSV 或直接粘贴 12 列 SEC 数据，自动读取 A280、A260 和 Fraction Mark；
+            峰图可在 min、mL、CV 之间切换。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -365,12 +369,12 @@ export default function ModulePurification({ data, update, batchId, cloudEnabled
 
           {adding || pur.chromatograms.length === 0 ? (
             <ChromatogramImport
-              onImport={(parsed, name, rawText) => {
+              onImport={(parsed, name, rawText, source, sourceName) => {
                 setPur((p) => ({
                   ...p,
                   chromatograms: [
                     ...p.chromatograms,
-                    createChromatogram(parsed, name, rawText),
+                    createChromatogram(parsed, name, rawText, source, sourceName),
                   ],
                 }));
                 setAdding(false);
@@ -387,7 +391,7 @@ export default function ModulePurification({ data, update, batchId, cloudEnabled
               onClick={() => setAdding(true)}
             >
               <Plus className="h-3.5 w-3.5" />
-              再粘贴一张层析图
+              再导入一张层析图
             </Button>
           )}
         </CardContent>
@@ -400,13 +404,14 @@ export default function ModulePurification({ data, update, batchId, cloudEnabled
               <TestTube2 className="h-4 w-4 text-pillar-utr" />
               <CardTitle className="text-base">纯化后表征</CardTitle>
             </div>
-            <RibogreenHandoffButton
+          <RibogreenHandoffButton
               batchId={batchId}
               stage="purify"
               disabled={systems.length === 0}
               onRefresh={() => void reload()}
               refreshing={loading}
-              loginRequired={!cloudEnabled}
+            loginRequired={!cloudEnabled}
+            projectId={scope.kind === "project" ? scope.projectId : undefined}
             />
           </div>
           <CardDescription>
@@ -476,9 +481,15 @@ function ChromatogramCard({
 }) {
   const [editing, setEditing] = useState(false);
 
-  function applyEdit(parsed: ParsedChromatogram, name: string, rawText: string) {
+  function applyEdit(
+    parsed: ParsedChromatogram,
+    name: string,
+    rawText: string,
+    source: "paste" | "csv" = "paste",
+    sourceName = ""
+  ) {
     onChange({
-      ...reparseChromatogram(chromatogram, parsed, rawText),
+      ...reparseChromatogram(chromatogram, parsed, rawText, source, sourceName),
       name: name || chromatogram.name,
     });
     setEditing(false);
@@ -497,6 +508,18 @@ function ChromatogramCard({
             {chromatogram.points.length} 点 ·{" "}
             {chromatogram.channels.map((c) => c.label).join(" / ") || "无通道"}
           </span>
+          <select
+            aria-label="峰图横轴"
+            value={chromatogram.xAxis}
+            onChange={(event) =>
+              onChange(setChromatogramXAxis(chromatogram, event.target.value as Chromatogram["xAxis"]))
+            }
+            className="h-7 rounded-md border bg-background px-2 text-xs"
+          >
+            {chromatogram.availableXAxes.map((axis) => (
+              <option key={axis} value={axis}>{axis}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
@@ -525,7 +548,21 @@ function ChromatogramCard({
           submitLabel="用新数据替换"
         />
       ) : (
-        <ChromatogramChart chromatogram={chromatogram} />
+        <ChromatogramChart
+          chromatogram={chromatogram}
+          onToggleFractionMarks={() =>
+            onChange({
+              ...chromatogram,
+              showFractionMarks: !chromatogram.showFractionMarks,
+            })
+          }
+          onRemoveFractionMark={(markId) =>
+            onChange({
+              ...chromatogram,
+              fractionMarks: chromatogram.fractionMarks.filter((mark) => mark.id !== markId),
+            })
+          }
+        />
       )}
 
       {!editing && chromatogram.rawText === "" && (
