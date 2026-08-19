@@ -5,7 +5,7 @@ import { navigatorLock } from "@supabase/supabase-js";
  * auth-js serializes every session operation behind the exclusive Web Lock
  * "lock:sb-<ref>-auth-token", and it holds that lock for the whole duration of
  * the network call it wraps. Its built-in ceiling is 10s, which this project's
- * Supabase round-trip (~2-3s, see the middleware timings in `next dev`) can
+ * Supabase round-trip (~2-3s, see the Proxy timings in `next dev`) can
  * blow through once a couple of operations queue up:
  *
  *   Acquiring an exclusive Navigator LockManager lock ... timed out waiting 10000ms
@@ -15,6 +15,23 @@ import { navigatorLock } from "@supabase/supabase-js";
  * Cross-tab safety is unchanged — only the patience is.
  */
 const LOCK_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort(init.signal?.reason);
+  init.signal?.addEventListener("abort", forwardAbort, { once: true });
+  const timer = window.setTimeout(() => controller.abort("supabase-timeout"), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+    init.signal?.removeEventListener("abort", forwardAbort);
+  }
+}
 
 // Built through a non-generic factory so the client keeps createBrowserClient's
 // *default* type arguments. Annotating with ReturnType<typeof createBrowserClient>
@@ -29,6 +46,7 @@ function build() {
         lock: (name, _acquireTimeout, fn) =>
           navigatorLock(name, LOCK_TIMEOUT_MS, fn),
       },
+      global: { fetch: fetchWithTimeout },
     }
   );
 }

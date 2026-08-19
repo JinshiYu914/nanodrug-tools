@@ -24,7 +24,7 @@ import { createClient } from "./client";
  * cookie store, so `session.user` here is read from the stored JWT rather than
  * re-verified against the server. That is the right trade for *UI gating*:
  * actual authorization is enforced by RLS (`auth.uid() = user_id` on every
- * row) and by the middleware, which still calls getUser() server-side on
+ * row) and by the Proxy, which verifies JWT claims server-side on
  * protected routes. Never treat this value as an authorization decision.
  */
 

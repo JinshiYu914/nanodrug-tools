@@ -15,7 +15,6 @@ export function useIvtBatch(userId: string | null) {
     empty: emptyIvtBatch,
     parse: parseIvtBatch,
     serialize: serializeIvtBatch,
-    autosaveDelay: 800,
     migration: "008_workbench_sync_safety.sql",
   });
   return { ...state, batch: state.item };

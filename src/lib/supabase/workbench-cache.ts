@@ -1,5 +1,5 @@
-import type { LnpItemType, LnpSavedItem } from "./lnp-service";
-import { listAllItems } from "./lnp-service";
+import type { LnpItemType, LnpSavedItem, LnpSavedItemSummary } from "./lnp-service";
+import { listItemSummaries } from "./lnp-service";
 import { PERSONAL_SCOPE, scopeKey, type DataScope } from "@/lib/projects/types";
 
 export type SyncedWorkbenchType =
@@ -145,18 +145,41 @@ export async function listWorkbenchCache(
   });
 }
 
-/** Cloud-first list with cached records as an offline-only fallback. */
+/**
+ * Merge lightweight cloud rows with local drafts. Only dirty cached payloads
+ * are attached; clean records remain metadata-only until selected.
+ */
+export function mergeWorkbenchSummaries(
+  rows: LnpSavedItemSummary[],
+  cached: WorkbenchCacheEntry[]
+): LnpSavedItem[] {
+  const dirtyById = new Map(
+    cached.filter((entry) => entry.dirty).map((entry) => [entry.itemId, entry])
+  );
+  const cloudIds = new Set(rows.map((row) => row.id));
+  const merged = rows.map((row) => ({
+    ...row,
+    data: dirtyById.get(row.id)?.data ?? null,
+  }));
+  const missingDirty = cached.filter(
+    (entry) => entry.dirty && !cloudIds.has(entry.itemId)
+  );
+  return [
+    ...merged,
+    ...missingDirty.map((entry) => ({ ...entry.item, data: entry.data })),
+  ];
+}
+
+/** Cloud-first summary list with cached records as an offline-only fallback. */
 export async function listSyncedWorkbenchItems(
   userId: string,
   type: SyncedWorkbenchType,
   scope: DataScope = PERSONAL_SCOPE
 ): Promise<LnpSavedItem[]> {
   try {
-    const rows = await listAllItems(type, scope);
-    await cacheCloudItems(userId, type, rows, scope);
+    const rows = await listItemSummaries(type, scope);
     const cached = await listWorkbenchCache(userId, type, scope);
     const cloudIds = new Set(rows.map((row) => row.id));
-    const missingDirty = cached.filter((entry) => entry.dirty && !cloudIds.has(entry.itemId));
     for (const entry of cached) {
       if (!entry.dirty && !cloudIds.has(entry.itemId)) {
         await deleteWorkbenchCache(userId, type, entry.itemId, scope);
@@ -164,41 +187,13 @@ export async function listSyncedWorkbenchItems(
     }
     // A locally edited record deleted on another device stays selectable long
     // enough for the hook to rescue it as a conflict copy.
-    return [
-      ...rows,
-      ...missingDirty.map((entry) => ({ ...entry.item, data: entry.data })),
-    ];
+    return mergeWorkbenchSummaries(rows, cached);
   } catch (error) {
     const cached = await listWorkbenchCache(userId, type, scope);
     if (cached.length === 0) throw error;
     return cached
       .map((entry) => ({ ...entry.item, data: entry.data }))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  }
-}
-
-/** Cache cloud rows without ever replacing a local unsynced draft. */
-export async function cacheCloudItems(
-  userId: string,
-  type: SyncedWorkbenchType,
-  items: LnpSavedItem[],
-  scope: DataScope = PERSONAL_SCOPE
-): Promise<void> {
-  for (const item of items) {
-    if (item.is_folder || !item.data) continue;
-    const current = await getWorkbenchCache(userId, type, item.id, scope);
-    if (current?.dirty) continue;
-    await putWorkbenchCache({
-      userId,
-      type,
-      itemId: item.id,
-      item,
-      data: item.data,
-      baseRevision: revisionOf(item),
-      dirty: false,
-      localUpdatedAt: item.updated_at,
-      scopeKey: scopeKey(scope),
-    }, scope);
   }
 }
 

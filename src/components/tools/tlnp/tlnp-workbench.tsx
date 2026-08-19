@@ -43,6 +43,7 @@ import BatchReport from "./batch-report";
 import BatchCompare from "./batch-compare";
 import { useTlnpBatch } from "./use-tlnp-batch";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
+import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
 import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
 
@@ -95,7 +96,17 @@ export default function TlnpWorkbench() {
     },
     [cloudUpdate, guest]
   );
-  const { select, clear, lastSavedAt, refreshToken, syncState, saveDraftToPersonal } = cloud;
+  const {
+    select,
+    clear,
+    save,
+    dirty,
+    saving,
+    lastSavedAt,
+    refreshToken,
+    syncState,
+    saveDraftToPersonal,
+  } = cloud;
 
   // The URL is the source of truth for which batch is open, so a link from the
   // RiboGreen grid — or a refresh — lands on the right one.
@@ -243,8 +254,8 @@ export default function TlnpWorkbench() {
 
   const handleSelectBatch = useCallback(
     (item: LnpSavedItem) => {
+      if (!select(item)) return;
       restoreAttempted.current = item.id;
-      select(item);
       writeUrl(item.id, moduleParam);
     },
     [select, writeUrl, moduleParam]
@@ -254,7 +265,7 @@ export default function TlnpWorkbench() {
     (id: string) => {
       if (batch?.id !== id) return;
       restoreAttempted.current = null;
-      clear();
+      clear(true);
       writeUrl(null, moduleParam);
     },
     [batch?.id, clear, writeUrl, moduleParam]
@@ -312,7 +323,11 @@ export default function TlnpWorkbench() {
               onBatchDeleted={handleBatchDeleted}
               refreshToken={refreshToken}
               scope={scope}
-              onScopeChange={(next) => { clear(); setScope(next); }}
+              onScopeChange={(next) => {
+                if (dirty && !window.confirm("当前修改尚未保存到云端，本机草稿会保留。是否仍要切换数据范围？")) return;
+                clear();
+                setScope(next);
+              }}
             />
           )}
         </aside>
@@ -351,6 +366,9 @@ export default function TlnpWorkbench() {
                 update={update}
                 lastSavedAt={lastSavedAt}
                 syncState={syncState}
+                save={save}
+                dirty={dirty}
+                saving={saving}
                 demo={guest}
                 activeModule={moduleParam}
                 onModuleChange={handleModuleChange}
@@ -443,6 +461,9 @@ function BatchHeader({
   update,
   lastSavedAt,
   syncState,
+  save,
+  dirty,
+  saving,
   demo,
   activeModule,
   onModuleChange,
@@ -452,6 +473,9 @@ function BatchHeader({
   update: ReturnType<typeof useTlnpBatch>["update"];
   lastSavedAt: Date | null;
   syncState: WorkbenchSyncState;
+  save: () => Promise<void>;
+  dirty: boolean;
+  saving: boolean;
   demo: boolean;
   activeModule: ModuleKey;
   onModuleChange: (key: ModuleKey) => void;
@@ -472,6 +496,7 @@ function BatchHeader({
               flow — they read across every module rather than being a fifth
               step, so they sit in the batch card instead of after the arrows. */}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {!demo && <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} />}
             <HeaderTab
               active={activeModule === "report"}
               onClick={() => onModuleChange("report")}
