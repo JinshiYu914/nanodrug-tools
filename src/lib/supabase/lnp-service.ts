@@ -47,6 +47,8 @@ const ITEM_SUMMARY_COLUMNS = [
   "data_revision",
 ].join(",");
 
+const ITEM_COLUMNS = `${ITEM_SUMMARY_COLUMNS},data`;
+
 export interface TreeNode extends LnpSavedItem {
   children: TreeNode[];
 }
@@ -58,7 +60,7 @@ export async function listAllItems(
   const supabase = createClient();
   let query = supabase
     .from("lnp_saved_items")
-    .select("*")
+    .select(ITEM_COLUMNS)
     .eq("type", type);
   query = scope.kind === "personal"
     ? query.is("project_id", null)
@@ -68,7 +70,7 @@ export async function listAllItems(
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as LnpSavedItem[];
+  return (data ?? []) as unknown as LnpSavedItem[];
 }
 
 /** Lightweight tree/list rows. Large workbench JSON payloads are loaded by id. */
@@ -97,7 +99,7 @@ export async function getItem(id: string): Promise<LnpSavedItem | null> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("lnp_saved_items")
-    .select("*")
+    .select(ITEM_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
@@ -205,11 +207,11 @@ export async function duplicateItem(id: string): Promise<LnpSavedItem> {
   const supabase = createClient();
   const { data: src, error: readErr } = await supabase
     .from("lnp_saved_items")
-    .select("*")
+    .select(ITEM_COLUMNS)
     .eq("id", id)
     .single();
   if (readErr) throw readErr;
-  const s = src as LnpSavedItem;
+  const s = src as unknown as LnpSavedItem;
 
   const scope: DataScope = s.project_id
     ? { kind: "project", projectId: s.project_id, role: "admin", status: "active" }

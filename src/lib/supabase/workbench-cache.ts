@@ -23,6 +23,7 @@ export interface WorkbenchCacheEntry {
 const DB_NAME = "lnp-partner-workbench-cache";
 const DB_VERSION = 2;
 const STORE = "records";
+const syncedListInFlight = new Map<string, Promise<LnpSavedItem[]>>();
 
 const keyOf = (userId: string, type: SyncedWorkbenchType, itemId: string, scope: DataScope) =>
   `${userId}:${scopeKey(scope)}:${type}:${itemId}`;
@@ -170,8 +171,7 @@ export function mergeWorkbenchSummaries(
   ];
 }
 
-/** Cloud-first summary list with cached records as an offline-only fallback. */
-export async function listSyncedWorkbenchItems(
+async function loadSyncedWorkbenchItems(
   userId: string,
   type: SyncedWorkbenchType,
   scope: DataScope = PERSONAL_SCOPE
@@ -195,6 +195,29 @@ export async function listSyncedWorkbenchItems(
       .map((entry) => ({ ...entry.item, data: entry.data }))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   }
+}
+
+/**
+ * Cloud summary list with cached records as an offline-only fallback.
+ * Concurrent consumers (for example the URL restorer and sidebar) share one
+ * request instead of issuing duplicate PostgREST reads during the same render.
+ */
+export function listSyncedWorkbenchItems(
+  userId: string,
+  type: SyncedWorkbenchType,
+  scope: DataScope = PERSONAL_SCOPE
+): Promise<LnpSavedItem[]> {
+  const key = `${userId}:${scopeKey(scope)}:${type}`;
+  const existing = syncedListInFlight.get(key);
+  if (existing) return existing;
+
+  const task = loadSyncedWorkbenchItems(userId, type, scope);
+  syncedListInFlight.set(key, task);
+  const clear = () => {
+    if (syncedListInFlight.get(key) === task) syncedListInFlight.delete(key);
+  };
+  void task.then(clear, clear);
+  return task;
 }
 
 export async function clearWorkbenchCacheForUser(userId: string): Promise<void> {

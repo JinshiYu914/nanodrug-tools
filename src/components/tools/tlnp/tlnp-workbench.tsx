@@ -44,6 +44,8 @@ import BatchCompare from "./batch-compare";
 import { useTlnpBatch } from "./use-tlnp-batch";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
+import WorkbenchSwitchDialog from "@/components/tools/workbench-switch-dialog";
+import { useWorkbenchItemSwitch } from "@/components/tools/use-workbench-item-switch";
 import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
 
@@ -252,14 +254,23 @@ export default function TlnpWorkbench() {
     writeUrl,
   ]);
 
-  const handleSelectBatch = useCallback(
+  const finishBatchSelection = useCallback(
     (item: LnpSavedItem) => {
-      if (!select(item)) return;
       restoreAttempted.current = item.id;
       writeUrl(item.id, moduleParam);
     },
-    [select, writeUrl, moduleParam]
+    [writeUrl, moduleParam]
   );
+
+  const batchSwitch = useWorkbenchItemSwitch({
+    dirty,
+    currentItemId: batch?.id ?? null,
+    select,
+    save,
+    onSelected: finishBatchSelection,
+  });
+
+  const handleSelectBatch = batchSwitch.requestSelect;
 
   const handleBatchDeleted = useCallback(
     (id: string) => {
@@ -419,6 +430,13 @@ export default function TlnpWorkbench() {
           )}
         </div>
       </div>
+      <WorkbenchSwitchDialog
+        targetName={batchSwitch.target?.name ?? null}
+        saving={batchSwitch.savingBeforeSwitch}
+        onCancel={batchSwitch.cancel}
+        onKeepDraftAndSwitch={batchSwitch.keepDraftAndSwitch}
+        onSaveAndSwitch={batchSwitch.saveAndSwitch}
+      />
     </Shell>
   );
 }
@@ -473,7 +491,7 @@ function BatchHeader({
   update: ReturnType<typeof useTlnpBatch>["update"];
   lastSavedAt: Date | null;
   syncState: WorkbenchSyncState;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   dirty: boolean;
   saving: boolean;
   demo: boolean;

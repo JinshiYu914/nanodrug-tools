@@ -10,7 +10,7 @@ export default function WorkbenchSaveButton({
 }: {
   dirty: boolean;
   saving: boolean;
-  onSave: () => Promise<void>;
+  onSave: () => Promise<boolean>;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">

@@ -34,6 +34,8 @@ import RnaLibraryView from "./rna-library";
 import { useIvtBatch } from "./use-ivt-batch";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
+import WorkbenchSwitchDialog from "@/components/tools/workbench-switch-dialog";
+import { useWorkbenchItemSwitch } from "@/components/tools/use-workbench-item-switch";
 import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 
 type ViewKey = "batch" | "library";
@@ -102,14 +104,23 @@ export default function IvtWorkbench() {
     [data.rnas, rnaParam]
   );
 
-  const handleSelectBatch = useCallback(
+  const finishBatchSelection = useCallback(
     (item: LnpSavedItem) => {
-      if (!select(item)) return;
       restoreAttempted.current = item.id;
       writeUrl({ view: "batch", batchId: item.id, rnaId: null });
     },
-    [select, writeUrl]
+    [writeUrl]
   );
+
+  const batchSwitch = useWorkbenchItemSwitch({
+    dirty,
+    currentItemId: batch?.id ?? null,
+    select,
+    save,
+    onSelected: finishBatchSelection,
+  });
+
+  const handleSelectBatch = batchSwitch.requestSelect;
 
   function addRna() {
     const seed = data.rnas[data.rnas.length - 1] ?? null;
@@ -193,6 +204,13 @@ export default function IvtWorkbench() {
           )}
         </main>
       </div>
+      <WorkbenchSwitchDialog
+        targetName={batchSwitch.target?.name ?? null}
+        saving={batchSwitch.savingBeforeSwitch}
+        onCancel={batchSwitch.cancel}
+        onKeepDraftAndSwitch={batchSwitch.keepDraftAndSwitch}
+        onSaveAndSwitch={batchSwitch.saveAndSwitch}
+      />
     </Shell>
   );
 }
