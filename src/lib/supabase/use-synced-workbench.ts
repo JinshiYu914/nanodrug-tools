@@ -54,7 +54,6 @@ export interface SyncedWorkbenchState<T> {
   select: (candidate: LnpSavedItem) => boolean;
   clear: (discardLocalDraft?: boolean) => void;
   save: () => Promise<void>;
-  reloadFromCloud: () => Promise<void>;
   dirty: boolean;
   syncState: WorkbenchSyncState;
   saving: boolean;
@@ -104,7 +103,6 @@ export function useSyncedWorkbench<T>({
   const editTokenRef = useRef(0);
   const selectTokenRef = useRef(0);
   const inFlightRef = useRef<Promise<void> | null>(null);
-  const reloadingRef = useRef(false);
   const flushRef = useRef<() => Promise<void>>(async () => undefined);
 
   const cache = useCallback(
@@ -176,7 +174,6 @@ export function useSyncedWorkbench<T>({
   );
 
   const flush = useCallback(async () => {
-    if (reloadingRef.current) return;
     if (inFlightRef.current) return inFlightRef.current;
     const attempt = pendingRef.current;
     if (!attempt || !userId || !writable) return;
@@ -385,79 +382,6 @@ export function useSyncedWorkbench<T>({
     return copy;
   }, [scope, serialize, type, userId]);
 
-  const reloadFromCloud = useCallback(async () => {
-    const current = itemRef.current;
-    if (!current || !userId || inFlightRef.current || reloadingRef.current) return;
-
-    const pendingAtStart = pendingRef.current;
-    if (
-      pendingAtStart &&
-      !window.confirm("从云端重新加载会放弃当前本机草稿。是否继续？")
-    ) {
-      return;
-    }
-
-    const requestToken = ++selectTokenRef.current;
-    const editTokenAtStart = editTokenRef.current;
-    setSyncState("pulling");
-    reloadingRef.current = true;
-
-    try {
-      let cloud: LnpSavedItem | null;
-      try {
-        cloud = await getItem(current.id);
-      } catch (error) {
-        if (requestToken !== selectTokenRef.current) return;
-        setSyncState(pendingRef.current ? "local-draft" : "synced");
-        console.warn(`[${type}] 手动重新加载云端失败`, error);
-        toast.error("无法从云端重新加载，当前内容未改变");
-        return;
-      }
-
-      if (
-        requestToken !== selectTokenRef.current ||
-        itemRef.current?.id !== current.id
-      ) {
-        return;
-      }
-
-      // Editing remains available while the request is in flight. Never let a
-      // slow manual reload overwrite a change made after the user clicked it.
-      if (editTokenRef.current !== editTokenAtStart) {
-        setSyncState("local-draft");
-        toast.warning("重新加载期间发生了新修改，本机草稿未被覆盖");
-        return;
-      }
-
-      if (!cloud) {
-        if (pendingRef.current) {
-          setSyncState("local-draft");
-          toast.warning("云端记录已删除，本机草稿仍然保留");
-        } else {
-          await deleteWorkbenchCache(userId, type, current.id, scope).catch(() => undefined);
-          setSyncState("error");
-          toast.error("当前记录已从云端删除");
-        }
-        return;
-      }
-
-      pendingRef.current = null;
-      const value = parse(cloud.data);
-      adopt(cloud, value, "synced");
-      setLastSavedAt(new Date(cloud.updated_at));
-      await cache(cloud, value, revisionOf(cloud), false);
-      toast.success("已从云端重新加载");
-    } catch (error) {
-      if (requestToken === selectTokenRef.current) {
-        setSyncState(pendingRef.current ? "local-draft" : "synced");
-        console.warn(`[${type}] 云端内容解析失败`, error);
-        toast.error("云端内容无法载入，当前内容未改变");
-      }
-    } finally {
-      reloadingRef.current = false;
-    }
-  }, [adopt, cache, parse, scope, type, userId]);
-
   const save = useCallback(async () => {
     await flushRef.current();
   }, []);
@@ -491,7 +415,6 @@ export function useSyncedWorkbench<T>({
     select,
     clear,
     save,
-    reloadFromCloud,
     dirty: syncState === "local-draft" || syncState === "error",
     syncState,
     saving: syncState === "saving" || syncState === "pulling",

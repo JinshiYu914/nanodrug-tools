@@ -100,7 +100,6 @@ export default function TlnpWorkbench() {
     select,
     clear,
     save,
-    reloadFromCloud,
     dirty,
     saving,
     lastSavedAt,
@@ -368,7 +367,6 @@ export default function TlnpWorkbench() {
                 lastSavedAt={lastSavedAt}
                 syncState={syncState}
                 save={save}
-                reloadFromCloud={reloadFromCloud}
                 dirty={dirty}
                 saving={saving}
                 demo={guest}
@@ -464,7 +462,6 @@ function BatchHeader({
   lastSavedAt,
   syncState,
   save,
-  reloadFromCloud,
   dirty,
   saving,
   demo,
@@ -477,7 +474,6 @@ function BatchHeader({
   lastSavedAt: Date | null;
   syncState: WorkbenchSyncState;
   save: () => Promise<void>;
-  reloadFromCloud: () => Promise<void>;
   dirty: boolean;
   saving: boolean;
   demo: boolean;
@@ -500,7 +496,7 @@ function BatchHeader({
               flow — they read across every module rather than being a fifth
               step, so they sit in the batch card instead of after the arrows. */}
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {!demo && <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} onReload={reloadFromCloud} />}
+            {!demo && <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} />}
             <HeaderTab
               active={activeModule === "report"}
               onClick={() => onModuleChange("report")}
