@@ -30,6 +30,23 @@ export interface LnpSavedItem {
   data_revision: number;
 }
 
+export type LnpSavedItemSummary = Omit<LnpSavedItem, "data">;
+
+const ITEM_SUMMARY_COLUMNS = [
+  "id",
+  "user_id",
+  "project_id",
+  "last_modified_by",
+  "type",
+  "is_folder",
+  "parent_id",
+  "name",
+  "sort_order",
+  "created_at",
+  "updated_at",
+  "data_revision",
+].join(",");
+
 export interface TreeNode extends LnpSavedItem {
   children: TreeNode[];
 }
@@ -52,6 +69,27 @@ export async function listAllItems(
 
   if (error) throw error;
   return (data ?? []) as LnpSavedItem[];
+}
+
+/** Lightweight tree/list rows. Large workbench JSON payloads are loaded by id. */
+export async function listItemSummaries(
+  type: LnpItemType,
+  scope: DataScope = PERSONAL_SCOPE
+): Promise<LnpSavedItemSummary[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from("lnp_saved_items")
+    .select(ITEM_SUMMARY_COLUMNS)
+    .eq("type", type);
+  query = scope.kind === "personal"
+    ? query.is("project_id", null)
+    : query.eq("project_id", scope.projectId);
+  const { data, error } = await query
+    .order("sort_order")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as unknown as LnpSavedItemSummary[];
 }
 
 /** Single row by id — used by the cross-tab "open this record" links. */
@@ -134,12 +172,14 @@ export async function updateItemData(
   if (expectedRevision !== undefined) {
     query = query.eq("data_revision", expectedRevision);
   }
-  const { data: row, error } = await query.select("*").maybeSingle();
+  // The caller already owns the payload it just wrote. Returning it again can
+  // double the network and JSON cost for large experiment notebooks.
+  const { data: row, error } = await query.select(ITEM_SUMMARY_COLUMNS).maybeSingle();
   if (error) throw error;
   if (!row) {
     throw new DataSyncConflictError(await getItem(id));
   }
-  return row as LnpSavedItem;
+  return { ...(row as unknown as LnpSavedItemSummary), data };
 }
 
 export async function deleteItem(id: string): Promise<void> {

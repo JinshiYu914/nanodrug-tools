@@ -38,6 +38,7 @@ import type { LipidEntry } from "@/lib/calculations/lnp-formula";
 import { useUser } from "@/lib/supabase/use-user";
 import { useSyncedWorkbench } from "@/lib/supabase/use-synced-workbench";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
+import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
 import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const num = (s: string) => {
@@ -126,6 +127,9 @@ export default function ScreeningMode({
     lastSavedAt,
     refreshToken,
     syncState,
+    save,
+    dirty,
+    saving,
     saveDraftToPersonal,
   } = useSyncedWorkbench<BenchSessionData>({
     userId: user?.id ?? null,
@@ -133,7 +137,6 @@ export default function ScreeningMode({
     empty: emptyBenchSession,
     parse: parseScreeningSession,
     serialize: serializeScreeningSession,
-    autosaveDelay: 200,
     migration: "008_workbench_sync_safety.sql",
     scope,
   });
@@ -149,16 +152,17 @@ export default function ScreeningMode({
   );
 
   const handleSelectSession = useCallback((item: LnpSavedItem) => {
-    selectSession(item);
+    if (!selectSession(item)) return;
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
     setHighlightId(null);
   }, [selectSession]);
 
   const handleScopeChange = useCallback((next: DataScope) => {
+    if (dirty && !window.confirm("当前修改尚未保存到云端，本机草稿会保留。是否仍要切换数据范围？")) return;
     clearSession();
     onScopeChange?.(next);
-  }, [clearSession, onScopeChange]);
+  }, [clearSession, dirty, onScopeChange]);
 
   // Which saved RiboGreen records reference which formulation. Loaded once per
   // mount — this tab is unmounted whenever it isn't showing, so re-entering it
@@ -191,7 +195,7 @@ export default function ScreeningMode({
   const handleSessionDeleted = useCallback(
     (id: string) => {
       if (activeSession?.id === id) {
-        clearSession();
+        clearSession(true);
         setWorkspace(createDefaultWorkspaceValue());
         setFormulationName("");
       }
@@ -455,6 +459,7 @@ export default function ScreeningMode({
                     <WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} />
                   </div>
                 </div>
+                <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} />
               </CardContent>
             </Card>
 

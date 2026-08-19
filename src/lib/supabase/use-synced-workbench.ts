@@ -7,12 +7,10 @@ import {
   createItem,
   DataSyncConflictError,
   getItem,
-  listAllItems,
   updateItemData,
   type LnpSavedItem,
 } from "./lnp-service";
 import {
-  cacheCloudItems,
   deleteWorkbenchCache,
   getWorkbenchCache,
   putWorkbenchCache,
@@ -46,7 +44,6 @@ interface Options<T> {
   empty: () => T;
   parse: (raw: unknown) => T;
   serialize: (data: T) => Record<string, unknown>;
-  autosaveDelay?: number;
   migration: string;
   scope?: DataScope;
 }
@@ -55,8 +52,10 @@ export interface SyncedWorkbenchState<T> {
   item: LnpSavedItem | null;
   data: T;
   update: (updater: (previous: T) => T) => void;
-  select: (candidate: LnpSavedItem) => void;
-  clear: () => void;
+  select: (candidate: LnpSavedItem) => boolean;
+  clear: (discardLocalDraft?: boolean) => void;
+  save: () => Promise<void>;
+  dirty: boolean;
   syncState: WorkbenchSyncState;
   saving: boolean;
   lastSavedAt: Date | null;
@@ -89,7 +88,6 @@ export function useSyncedWorkbench<T>({
   empty,
   parse,
   serialize,
-  autosaveDelay = 800,
   migration,
   scope = PERSONAL_SCOPE,
 }: Options<T>): SyncedWorkbenchState<T> {
@@ -103,10 +101,8 @@ export function useSyncedWorkbench<T>({
   const itemRef = useRef<LnpSavedItem | null>(null);
   const dataRef = useRef<T>(data);
   const pendingRef = useRef<Pending<T> | null>(null);
-  const editRequestedRef = useRef(false);
   const editTokenRef = useRef(0);
   const selectTokenRef = useRef(0);
-  const saveTimerRef = useRef<number | null>(null);
   const inFlightRef = useRef<Promise<void> | null>(null);
   const flushRef = useRef<() => Promise<void>>(async () => undefined);
 
@@ -196,7 +192,6 @@ export function useSyncedWorkbench<T>({
         itemRef.current = { ...saved, data: serialize(valueNow) };
         setItem(itemRef.current);
         setLastSavedAt(new Date(saved.updated_at));
-        setRefreshToken((value) => value + 1);
 
         if (!latest || latest.token === attempt.token) {
           pendingRef.current = null;
@@ -207,8 +202,6 @@ export function useSyncedWorkbench<T>({
           latest.baseRevision = revisionOf(saved);
           await cache(saved, latest.data, latest.baseRevision, true);
           setSyncState("local-draft");
-          if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = window.setTimeout(() => void flushRef.current(), autosaveDelay);
         }
       } catch (error) {
         if (error instanceof DataSyncConflictError) {
@@ -229,13 +222,13 @@ export function useSyncedWorkbench<T>({
         await cache(latest.item, latest.data, latest.baseRevision, true);
         const offline = typeof navigator !== "undefined" && !navigator.onLine;
         setSyncState(offline ? "local-draft" : "error");
-        console.warn(`[${type}] 自动同步失败`, error);
+        console.warn(`[${type}] 保存到云端失败`, error);
         if (!offline) {
           const message = (error as { message?: string })?.message ?? "";
           toast.error(
             message.includes("data_revision")
               ? `请先在 Supabase 执行 ${migration}`
-              : "同步失败，本机草稿已保留"
+              : "保存失败，本机草稿已保留"
           );
         }
       } finally {
@@ -244,34 +237,43 @@ export function useSyncedWorkbench<T>({
     })();
     inFlightRef.current = task;
     return task;
-  }, [autosaveDelay, cache, migration, preserveConflict, serialize, type, userId, writable]);
+  }, [cache, migration, preserveConflict, serialize, type, userId, writable]);
 
   flushRef.current = flush;
 
-  // Only explicit calls to update mark data as dirty. Loading/parsing a record
-  // can therefore never cause a write of defaults or a normalized legacy blob.
-  useEffect(() => {
-    if (!editRequestedRef.current) return;
-    editRequestedRef.current = false;
+  const update = useCallback((updater: (previous: T) => T) => {
+    if (!writable) return;
+    const next = updater(dataRef.current);
+    dataRef.current = next;
+    setData(next);
     const current = itemRef.current;
     if (!current || !userId || !writable) return;
     const token = ++editTokenRef.current;
     const baseRevision = pendingRef.current?.baseRevision ?? revisionOf(current);
-    pendingRef.current = { item: current, data, baseRevision, token };
-    void cache(current, data, baseRevision, true);
+    pendingRef.current = { item: current, data: next, baseRevision, token };
+    void cache(current, next, baseRevision, true);
     setSyncState("local-draft");
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => void flushRef.current(), autosaveDelay);
-  }, [autosaveDelay, cache, data, userId, writable]);
+  }, [cache, userId, writable]);
 
   const select = useCallback(
     (candidate: LnpSavedItem) => {
-      if (!userId) return;
+      if (!userId) return false;
+      const previous = pendingRef.current;
+      if (
+        previous &&
+        previous.item.id !== candidate.id &&
+        !window.confirm("当前修改尚未保存到云端，但本机草稿会保留。是否仍要切换记录？")
+      ) {
+        return false;
+      }
       const requestToken = ++selectTokenRef.current;
       setSyncState("pulling");
       void (async () => {
-        // The previous record is already durable in IndexedDB even if offline.
-        if (pendingRef.current) await flushRef.current();
+        // Switching never writes to Supabase. Make the previous local draft
+        // durable first, then load the selected row cloud-first.
+        if (previous) {
+          await cache(previous.item, previous.data, previous.baseRevision, true);
+        }
         let cloud: LnpSavedItem | null = null;
         try {
           cloud = await getItem(candidate.id);
@@ -279,7 +281,7 @@ export function useSyncedWorkbench<T>({
           const cached = await getWorkbenchCache(userId, type, candidate.id, scope).catch(() => null);
           if (requestToken !== selectTokenRef.current) return;
           if (!cached) {
-            setSyncState("error");
+            setSyncState(previous ? "local-draft" : "error");
             toast.error("无法从云端载入记录，且本机没有可用缓存");
             return;
           }
@@ -309,14 +311,10 @@ export function useSyncedWorkbench<T>({
             };
             pendingRef.current = pending;
             adopt(cached.item, draft, "local-draft");
-            try {
-              await preserveConflict(pending);
-            } catch (error) {
-              console.warn(`[${type}] 已删除记录的草稿救援失败`, error);
-            }
+            toast.warning("云端记录已删除，本机草稿仍在；点击保存可创建冲突副本");
           } else {
             await deleteWorkbenchCache(userId, type, candidate.id, scope).catch(() => undefined);
-            setSyncState("error");
+            setSyncState(previous ? "local-draft" : "error");
             toast.error("该记录已被删除");
           }
           return;
@@ -334,17 +332,9 @@ export function useSyncedWorkbench<T>({
             token: ++editTokenRef.current,
           };
           pendingRef.current = pending;
-          if (decision === "resume-draft") {
-            adopt(cloud, draft, "local-draft");
-            saveTimerRef.current = window.setTimeout(() => void flushRef.current(), 0);
-          } else {
-            adopt(cloud, draft, "local-draft");
-            try {
-              await preserveConflict(pending);
-            } catch (error) {
-              console.warn(`[${type}] 冲突副本创建失败`, error);
-              setSyncState("local-draft");
-            }
+          adopt(cloud, draft, "local-draft");
+          if (decision === "preserve-conflict") {
+            toast.warning("云端已有新版本；点击保存时会把本机内容保留为冲突副本");
           }
           return;
         }
@@ -355,21 +345,13 @@ export function useSyncedWorkbench<T>({
         setLastSavedAt(new Date(cloud.updated_at));
         await cache(cloud, value, revisionOf(cloud), false);
       })();
+      return true;
     },
-    [adopt, cache, parse, preserveConflict, scope, type, userId]
+    [adopt, cache, parse, scope, type, userId]
   );
 
-  const update = useCallback((updater: (previous: T) => T) => {
-    if (!writable) return;
-    editRequestedRef.current = true;
-    setData((previous) => {
-      const next = updater(previous);
-      dataRef.current = next;
-      return next;
-    });
-  }, [writable]);
-
-  const clear = useCallback(() => {
+  const clear = useCallback((discardLocalDraft = false) => {
+    const current = itemRef.current;
     selectTokenRef.current += 1;
     itemRef.current = null;
     pendingRef.current = null;
@@ -378,7 +360,10 @@ export function useSyncedWorkbench<T>({
     setData(dataRef.current);
     setSyncState("idle");
     setLastSavedAt(null);
-  }, [empty]);
+    if (discardLocalDraft && current && userId) {
+      void deleteWorkbenchCache(userId, type, current.id, scope).catch(() => undefined);
+    }
+  }, [empty, scope, type, userId]);
 
   const saveDraftToPersonal = useCallback(async () => {
     const current = itemRef.current;
@@ -398,60 +383,72 @@ export function useSyncedWorkbench<T>({
     return copy;
   }, [scope, serialize, type, userId]);
 
-  // Warm the per-user cache from the cloud. A dirty entry is never replaced.
+  // Optional private Broadcast carries metadata only. It stays off until the
+  // matching migration is deployed; focus refresh remains the safe fallback.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || process.env.NEXT_PUBLIC_WORKBENCH_REALTIME_ENABLED !== "true") return;
+    const supabase = createClient();
+    const topic = scope.kind === "personal"
+      ? `workbench:user:${userId}`
+      : `workbench:project:${scope.projectId}`;
     let cancelled = false;
-    void listAllItems(type, scope)
-      .then((rows) => (cancelled ? undefined : cacheCloudItems(userId, type, rows, scope)))
-      .catch((error) => console.warn(`[${type}] 云端预取失败`, error));
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    void (async () => {
+      await supabase.realtime.setAuth();
+      if (cancelled) return;
+      channel = supabase
+        .channel(topic, { config: { private: true } })
+        .on(
+          "broadcast",
+          { event: "lnp_saved_item_changed" },
+          ({ payload }) => {
+            const remote = payload as Pick<
+              LnpSavedItem,
+              "id" | "type" | "data_revision" | "updated_at" | "last_modified_by"
+            > & { operation: "INSERT" | "UPDATE" | "DELETE" };
+            if (!remote || remote.type !== type) return;
+            const current = itemRef.current;
+            if (!current || current.id !== remote.id) {
+              if (remote.operation !== "UPDATE") {
+                setRefreshToken((value) => value + 1);
+              }
+              return;
+            }
+            if (remote.operation === "DELETE") {
+              if (pendingRef.current) {
+                toast.warning("云端记录已删除；本机草稿仍在，保存时会创建冲突副本");
+              } else {
+                setSyncState("error");
+                toast.error("当前记录已在另一台设备删除");
+              }
+              return;
+            }
+            if (revisionOf(remote) <= revisionOf(current)) return;
+            if (pendingRef.current) {
+              toast.warning("另一台设备已保存新版本；本机草稿不会被覆盖");
+              return;
+            }
+            void getItem(remote.id).then((fresh) => {
+              if (!fresh || pendingRef.current || revisionOf(fresh) <= revisionOf(itemRef.current ?? current)) return;
+              const value = parse(fresh.data);
+              adopt(fresh, value, "synced");
+              void cache(fresh, value, revisionOf(fresh), false);
+              toast.info("已载入另一台设备保存的最新版本");
+            }).catch((error) => console.warn(`[${type}] 实时版本读取失败`, error));
+          }
+        )
+        .subscribe();
+    })().catch((error) => console.warn(`[${type}] 实时频道连接失败`, error));
     return () => {
       cancelled = true;
-    };
-  }, [scope, type, userId]);
-
-  // Realtime handles remote inserts/updates; focus refresh covers deletes and
-  // browsers where the Realtime publication is temporarily unavailable.
-  useEffect(() => {
-    if (!userId) return;
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`workbench:${type}:${userId}:${scopeKey(scope)}`)
-      .on(
-        "postgres_changes",
-        scope.kind === "personal"
-          ? { event: "*", schema: "public", table: "lnp_saved_items", filter: `user_id=eq.${userId}` }
-          : { event: "*", schema: "public", table: "lnp_saved_items", filter: `project_id=eq.${scope.projectId}` },
-        (payload) => {
-          const remote = payload.new as unknown as LnpSavedItem;
-          if (!remote || remote.type !== type) return;
-          setRefreshToken((value) => value + 1);
-          const current = itemRef.current;
-          if (!current || current.id !== remote.id) return;
-          if (revisionOf(remote) <= revisionOf(current)) return;
-          if (pendingRef.current) {
-            void flushRef.current();
-            return;
-          }
-          const value = parse(remote.data);
-          adopt(remote, value, "synced");
-          void cache(remote, value, revisionOf(remote), false);
-          toast.info("已载入另一台设备保存的最新版本");
-        }
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [adopt, cache, parse, scope, type, userId]);
 
   useEffect(() => {
     if (!userId) return;
     const refreshActive = async () => {
-      if (pendingRef.current) {
-        await flushRef.current();
-        return;
-      }
+      if (pendingRef.current) return;
       const current = itemRef.current;
       if (!current) return;
       try {
@@ -476,18 +473,31 @@ export function useSyncedWorkbench<T>({
     };
   }, [adopt, cache, parse, type, userId]);
 
-  useEffect(
-    () => () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-      if (pendingRef.current) void cache(
-        pendingRef.current.item,
-        pendingRef.current.data,
-        pendingRef.current.baseRevision,
-        true
-      );
-    },
-    [cache]
-  );
+  const save = useCallback(async () => {
+    await flushRef.current();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && pendingRef.current) {
+        event.preventDefault();
+        void flushRef.current();
+      }
+    };
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!pendingRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      const pending = pendingRef.current;
+      if (pending) void cache(pending.item, pending.data, pending.baseRevision, true);
+    };
+  }, [cache]);
 
   return {
     item,
@@ -495,6 +505,8 @@ export function useSyncedWorkbench<T>({
     update,
     select,
     clear,
+    save,
+    dirty: syncState === "local-draft" || syncState === "error",
     syncState,
     saving: syncState === "saving" || syncState === "pulling",
     lastSavedAt,

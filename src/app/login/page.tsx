@@ -29,18 +29,28 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
       router.push("/");
       router.refresh();
+    } catch (loginError) {
+      const message = loginError instanceof Error ? loginError.message : "";
+      setError(
+        message.toLowerCase().includes("abort") || message.toLowerCase().includes("timeout")
+          ? "登录服务响应超时，请稍后重试。你的账号信息没有丢失。"
+          : "登录服务暂时不可用，请稍后重试。"
+      );
+    } finally {
+      setLoading(false);
     }
   }
 

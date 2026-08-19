@@ -22,11 +22,9 @@ corepack pnpm@10 build
 > 原始基线是 35 errors / 17 warnings，其中 28 errors 来自 `References/`（外部参考资料，
 > tsconfig 已排除但 eslint 没有）。已在 `eslint.config.mjs` 补上 `References/**` 忽略规则。
 
-### 遗留告警（暂不处理）
+### 已处理的基础设施告警
 
-- `⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.` ——
-  Next 16 要求把 `src/middleware.ts` 改名为 `src/proxy.ts`。等阶段二动 middleware（移除
-  `/plasmid`、清理 `/dashboard`、加 `/admin`）时一并处理。
+- `src/proxy.ts` 已替代 Next 16 弃用的 `src/middleware.ts`；Proxy 只匹配需要服务端登录保护的 `/profile/:path*`。
 
 ## 1. 路由走查
 
@@ -71,7 +69,7 @@ corepack pnpm@10 build
 
 `/tools/tlnp`。改动 `src/components/tools/tlnp/**` 或 `src/lib/calculations/tlnp-*.ts` 之后重跑。
 
-1. **登录门**：未登录访问显示页内登录卡片，不崩、不跳转（`/tools/*` 不受 middleware 保护，
+1. **登录门**：未登录访问显示页内登录卡片，不崩、不跳转（`/tools/*` 不受 Proxy 保护，
    真正的隔离靠 RLS）。
 2. **迁移失败模式**：`004_tlnp_experiment.sql` 未执行时新建批次必须提示
    「请先在 Supabase 执行 004_tlnp_experiment.sql 迁移」，而不是笼统的「操作失败」；

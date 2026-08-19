@@ -19,7 +19,6 @@ export function useTlnpBatch(userId: string | null, scope: DataScope = PERSONAL_
     empty: emptyTlnpExperiment,
     parse: parseTlnp,
     serialize: serializeTlnpExperiment,
-    autosaveDelay: 800,
     migration: "008_workbench_sync_safety.sql",
     scope,
   });

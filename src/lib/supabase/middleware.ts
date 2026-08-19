@@ -29,17 +29,17 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims verifies the JWT locally when asymmetric signing keys are in
+  // use, avoiding a /auth/v1/user round-trip on every protected navigation.
+  const { data: identity } = await supabase.auth.getClaims();
 
   // Protected routes: redirect to login if not authenticated.
   //
   // This only proves someone is signed in. Anything that needs a stronger
   // claim — /admin needing an app_admins row, for instance — must re-check
-  // server-side in its own layout; middleware cannot make that decision.
+  // server-side in its own layout; Proxy cannot make that decision.
   if (
-    !user &&
+    !identity?.claims &&
     ["/profile"].some((prefix) => request.nextUrl.pathname.startsWith(prefix))
   ) {
     const url = request.nextUrl.clone();
