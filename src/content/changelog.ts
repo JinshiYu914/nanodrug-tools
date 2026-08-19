@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.3.0",
+    date: "2026-08-19",
+    title: "ELISA 计算工具",
+    summary: "新增本地 ELISA 标准曲线拟合、批量样本反算与 Excel 导出。",
+    highlights: [
+      "支持 8 点标准曲线、1–3 个复孔及 4PL、线性和半对数拟合。",
+      "支持 Excel 多行多列粘贴、96 孔板按列导入和样本结果一键复制。",
+      "Excel 导出包含实验信息、计算公式、两位小数结果和拟合曲线图。",
+    ],
+  },
+  {
     version: "v1.2.0",
     date: "2026-08-14",
     title: "课题协作与层析数据导入",

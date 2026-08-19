@@ -68,6 +68,11 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "General calculators",
     tools: [
       {
+        href: "/tools/elisa",
+        label: "ELISA Calculator",
+        blurb: "Fit 8-point curves and calculate OD450 sample concentrations.",
+      },
+      {
         href: "/tools/mol-weight",
         label: "Molecular Weight",
         blurb: "Formula to MW, with element breakdown.",
@@ -114,6 +119,7 @@ export const FOOTER_LINKS: { heading: string; links: NavLink[] }[] = [
       { href: "/tools/lnp-formula", label: "LNP Calculator" },
       { href: "/tools/tlnp", label: "tLNP Workbench" },
       { href: "/tools/ivt", label: "IVT mRNA Workbench" },
+      { href: "/tools/elisa", label: "ELISA Calculator" },
       { href: "/assistant", label: "AI Assistant" },
     ],
   },
