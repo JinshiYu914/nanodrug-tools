@@ -98,7 +98,7 @@ userId:scope:type:itemId
 
 ## 7. 离线恢复与冲突副本
 
-已有缓存的记录可以离线打开和编辑；新建实验、文件夹及首次从未缓存的记录仍要求联网。浏览器触发 `online`、页面重新聚焦或 Supabase Realtime 通知时重新核对云端。
+已有缓存的记录可以离线打开和编辑；新建实验、文件夹及首次从未缓存的记录仍要求联网。浏览器重新联网、页面重新聚焦时不会自动读取或写入云端。
 
 恢复联网后不会自动上传。用户手动保存时：
 
@@ -110,17 +110,25 @@ userId:scope:type:itemId
 
 冲突副本是完整工作台记录，不尝试逐字段合并。用户可以对照两份内容后决定保留、重命名或删除哪一份。
 
-## 8. Realtime 与页面恢复
+## 8. 手动从云端重新加载
 
-`NEXT_PUBLIC_WORKBENCH_REALTIME_ENABLED` 默认未启用，以避免大型 JSON 更新经 Postgres Changes 放大数据库负载。`014_workbench_broadcast.sql` 改用私有 Broadcast：数据库只发送记录 ID、类型、版本、更新时间和操作类型，客户端确认版本更新后才按 ID 读取正文；不再通过 Realtime 发送实验 JSON。已经执行过早期 014 版本的项目还需执行 `015_limit_workbench_broadcast.sql`，把触发器限制在 tLNP、IVT 与配方筛选三个工作台类型。启用前必须同时部署迁移和设置环境变量。
+工作台长期关闭 Realtime，也不监听浏览器重新联网或页面重新获得焦点事件。客户端不会建立工作台 Broadcast/Postgres Changes 频道；数据库迁移 `016_disable_workbench_broadcast.sql` 会删除 014/015 添加的触发器、函数和 `realtime.messages` 策略。
 
-Realtime 关闭时，浏览器重新联网或页面重新获得焦点会在没有本机草稿的情况下主动复核当前记录：
+云端正文只在以下动作读取：
 
-- 没有本机修改：直接采用云端新版；
-- 有本机修改：不读取、不上传、不覆盖，等待用户保存；
-- 保存时发现版本变化：创建冲突副本。
+- 首次打开或切换记录；
+- 用户刷新整个页面并恢复当前记录；
+- 用户点击“从云端重新加载”。
 
-实时消息仅作为“需要重新读取”的信号，最终内容仍从 Supabase 重新获取，避免直接信任不完整或乱序的事件 payload。
+主动重新加载当前记录时：
+
+- 没有本机修改：直接以云端版本替换当前内容和干净缓存；
+- 有本机草稿：先确认是否放弃草稿，用户取消则不发起覆盖；
+- 请求失败：保留当前内容和 IndexedDB 草稿；
+- 请求期间又发生编辑：不采用迟到的云端响应，保留新草稿；
+- 云端记录已删除：干净缓存清除；有草稿时仍保留草稿。
+
+多终端之间不会自动刷新。另一终端保存后，本终端要通过上述读取动作才能看到新版本；如果本终端已基于旧版本编辑，手动保存仍由 CAS 检出冲突并创建副本。
 
 ## 9. 状态显示
 
@@ -151,16 +159,18 @@ Realtime 关闭时，浏览器重新联网或页面重新获得焦点会在没�
 
 ## 12. 运维与验收
 
-部署新代码前必须确认 Supabase 已执行 `008_workbench_sync_safety.sql`。Disk IO Budget 恢复后，在低流量窗口手动执行 `013_lnp_saved_items_io_indexes.sql`。`014_workbench_broadcast.sql` 必须与支持 Broadcast 的前端一起发布；在此之前不要把 `NEXT_PUBLIC_WORKBENCH_REALTIME_ENABLED` 设为 `true`。未执行版本迁移时，客户端会保留本机草稿并提示迁移文件，不应反复尝试无版本保护的覆盖写入。
+部署新代码前必须确认 Supabase 已执行 `008_workbench_sync_safety.sql`。Disk IO Budget 恢复后，在低流量窗口手动执行 `013_lnp_saved_items_io_indexes.sql`。已执行过 014/015 的项目需再执行 `016_disable_workbench_broadcast.sql`，并删除或继续不设置 `NEXT_PUBLIC_WORKBENCH_REALTIME_ENABLED`；新前端不再读取该变量。未执行版本迁移时，客户端会保留本机草稿并提示迁移文件，不应反复尝试无版本保护的覆盖写入。
 
 发布前至少验证：
 
-1. A、B 两个独立登录会话打开同一记录；A 保存后，B 重新打开应先看到 A 的云端最新版。
+1. A、B 两个独立登录会话打开同一记录；A 保存后，B 保持原内容，点击“从云端重新加载”或刷新页面后看到 A 的云端最新版。
 2. A、B 基于同一 revision 分别编辑；先保存的一端更新原记录，后一端生成冲突副本。
-3. 已缓存记录断网编辑、刷新、恢复联网；恢复后不自动上传，点击保存才更新云端。
+3. 已缓存记录断网编辑、刷新、恢复联网；恢复后不自动读取或上传，点击保存才更新云端。
 4. 云端读取失败或记录被删除时，空白默认值不产生写请求。
 5. 连续编辑期间没有 Supabase PATCH；一次手动保存只产生一次 PATCH，且不触发侧栏全量正文读取。
 6. 访客编辑后刷新恢复示例，浏览器网络和存储面板中没有 Supabase/IndexedDB 写入。
+7. 页面切到后台再回来、网络离线再恢复时没有工作台云端读取，也没有 Realtime WebSocket/频道。
+8. 有本机草稿时点击“从云端重新加载”会先确认；取消后草稿不变，请求失败时草稿仍在。
 
 关键实现位置：
 
@@ -169,3 +179,4 @@ Realtime 关闭时，浏览器重新联网或页面重新获得焦点会在没�
 - `src/lib/supabase/sync-policy.ts`
 - `src/lib/supabase/lnp-service.ts`
 - `supabase/migrations/008_workbench_sync_safety.sql`
+- `supabase/migrations/016_disable_workbench_broadcast.sql`

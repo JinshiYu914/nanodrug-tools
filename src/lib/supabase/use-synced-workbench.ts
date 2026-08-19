@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "./client";
 import {
   createItem,
   DataSyncConflictError,
@@ -55,6 +54,7 @@ export interface SyncedWorkbenchState<T> {
   select: (candidate: LnpSavedItem) => boolean;
   clear: (discardLocalDraft?: boolean) => void;
   save: () => Promise<void>;
+  reloadFromCloud: () => Promise<void>;
   dirty: boolean;
   syncState: WorkbenchSyncState;
   saving: boolean;
@@ -104,6 +104,7 @@ export function useSyncedWorkbench<T>({
   const editTokenRef = useRef(0);
   const selectTokenRef = useRef(0);
   const inFlightRef = useRef<Promise<void> | null>(null);
+  const reloadingRef = useRef(false);
   const flushRef = useRef<() => Promise<void>>(async () => undefined);
 
   const cache = useCallback(
@@ -175,6 +176,7 @@ export function useSyncedWorkbench<T>({
   );
 
   const flush = useCallback(async () => {
+    if (reloadingRef.current) return;
     if (inFlightRef.current) return inFlightRef.current;
     const attempt = pendingRef.current;
     if (!attempt || !userId || !writable) return;
@@ -383,95 +385,78 @@ export function useSyncedWorkbench<T>({
     return copy;
   }, [scope, serialize, type, userId]);
 
-  // Optional private Broadcast carries metadata only. It stays off until the
-  // matching migration is deployed; focus refresh remains the safe fallback.
-  useEffect(() => {
-    if (!userId || process.env.NEXT_PUBLIC_WORKBENCH_REALTIME_ENABLED !== "true") return;
-    const supabase = createClient();
-    const topic = scope.kind === "personal"
-      ? `workbench:user:${userId}`
-      : `workbench:project:${scope.projectId}`;
-    let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    void (async () => {
-      await supabase.realtime.setAuth();
-      if (cancelled) return;
-      channel = supabase
-        .channel(topic, { config: { private: true } })
-        .on(
-          "broadcast",
-          { event: "lnp_saved_item_changed" },
-          ({ payload }) => {
-            const remote = payload as Pick<
-              LnpSavedItem,
-              "id" | "type" | "data_revision" | "updated_at" | "last_modified_by"
-            > & { operation: "INSERT" | "UPDATE" | "DELETE" };
-            if (!remote || remote.type !== type) return;
-            const current = itemRef.current;
-            if (!current || current.id !== remote.id) {
-              if (remote.operation !== "UPDATE") {
-                setRefreshToken((value) => value + 1);
-              }
-              return;
-            }
-            if (remote.operation === "DELETE") {
-              if (pendingRef.current) {
-                toast.warning("云端记录已删除；本机草稿仍在，保存时会创建冲突副本");
-              } else {
-                setSyncState("error");
-                toast.error("当前记录已在另一台设备删除");
-              }
-              return;
-            }
-            if (revisionOf(remote) <= revisionOf(current)) return;
-            if (pendingRef.current) {
-              toast.warning("另一台设备已保存新版本；本机草稿不会被覆盖");
-              return;
-            }
-            void getItem(remote.id).then((fresh) => {
-              if (!fresh || pendingRef.current || revisionOf(fresh) <= revisionOf(itemRef.current ?? current)) return;
-              const value = parse(fresh.data);
-              adopt(fresh, value, "synced");
-              void cache(fresh, value, revisionOf(fresh), false);
-              toast.info("已载入另一台设备保存的最新版本");
-            }).catch((error) => console.warn(`[${type}] 实时版本读取失败`, error));
-          }
-        )
-        .subscribe();
-    })().catch((error) => console.warn(`[${type}] 实时频道连接失败`, error));
-    return () => {
-      cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
-    };
-  }, [adopt, cache, parse, scope, type, userId]);
+  const reloadFromCloud = useCallback(async () => {
+    const current = itemRef.current;
+    if (!current || !userId || inFlightRef.current || reloadingRef.current) return;
 
-  useEffect(() => {
-    if (!userId) return;
-    const refreshActive = async () => {
-      if (pendingRef.current) return;
-      const current = itemRef.current;
-      if (!current) return;
+    const pendingAtStart = pendingRef.current;
+    if (
+      pendingAtStart &&
+      !window.confirm("从云端重新加载会放弃当前本机草稿。是否继续？")
+    ) {
+      return;
+    }
+
+    const requestToken = ++selectTokenRef.current;
+    const editTokenAtStart = editTokenRef.current;
+    setSyncState("pulling");
+    reloadingRef.current = true;
+
+    try {
+      let cloud: LnpSavedItem | null;
       try {
-        const remote = await getItem(current.id);
-        if (!remote || revisionOf(remote) <= revisionOf(current)) return;
-        const value = parse(remote.data);
-        adopt(remote, value, "synced");
-        await cache(remote, value, revisionOf(remote), false);
+        cloud = await getItem(current.id);
       } catch (error) {
-        console.warn(`[${type}] 前台刷新失败`, error);
+        if (requestToken !== selectTokenRef.current) return;
+        setSyncState(pendingRef.current ? "local-draft" : "synced");
+        console.warn(`[${type}] 手动重新加载云端失败`, error);
+        toast.error("无法从云端重新加载，当前内容未改变");
+        return;
       }
-    };
-    const onOnline = () => void refreshActive();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void refreshActive();
-    };
-    window.addEventListener("online", onOnline);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [adopt, cache, parse, type, userId]);
+
+      if (
+        requestToken !== selectTokenRef.current ||
+        itemRef.current?.id !== current.id
+      ) {
+        return;
+      }
+
+      // Editing remains available while the request is in flight. Never let a
+      // slow manual reload overwrite a change made after the user clicked it.
+      if (editTokenRef.current !== editTokenAtStart) {
+        setSyncState("local-draft");
+        toast.warning("重新加载期间发生了新修改，本机草稿未被覆盖");
+        return;
+      }
+
+      if (!cloud) {
+        if (pendingRef.current) {
+          setSyncState("local-draft");
+          toast.warning("云端记录已删除，本机草稿仍然保留");
+        } else {
+          await deleteWorkbenchCache(userId, type, current.id, scope).catch(() => undefined);
+          setSyncState("error");
+          toast.error("当前记录已从云端删除");
+        }
+        return;
+      }
+
+      pendingRef.current = null;
+      const value = parse(cloud.data);
+      adopt(cloud, value, "synced");
+      setLastSavedAt(new Date(cloud.updated_at));
+      await cache(cloud, value, revisionOf(cloud), false);
+      toast.success("已从云端重新加载");
+    } catch (error) {
+      if (requestToken === selectTokenRef.current) {
+        setSyncState(pendingRef.current ? "local-draft" : "synced");
+        console.warn(`[${type}] 云端内容解析失败`, error);
+        toast.error("云端内容无法载入，当前内容未改变");
+      }
+    } finally {
+      reloadingRef.current = false;
+    }
+  }, [adopt, cache, parse, scope, type, userId]);
 
   const save = useCallback(async () => {
     await flushRef.current();
@@ -506,6 +491,7 @@ export function useSyncedWorkbench<T>({
     select,
     clear,
     save,
+    reloadFromCloud,
     dirty: syncState === "local-draft" || syncState === "error",
     syncState,
     saving: syncState === "saving" || syncState === "pulling",
