@@ -128,6 +128,7 @@ export default function ScreeningMode({
     refreshToken,
     syncState,
     save,
+    reloadFromCloud,
     dirty,
     saving,
     saveDraftToPersonal,
@@ -459,7 +460,7 @@ export default function ScreeningMode({
                     <WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} />
                   </div>
                 </div>
-                <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} />
+                <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} onReload={reloadFromCloud} />
               </CardContent>
             </Card>
 
