@@ -39,6 +39,8 @@ import { useUser } from "@/lib/supabase/use-user";
 import { useSyncedWorkbench } from "@/lib/supabase/use-synced-workbench";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
+import WorkbenchSwitchDialog from "@/components/tools/workbench-switch-dialog";
+import { useWorkbenchItemSwitch } from "@/components/tools/use-workbench-item-switch";
 import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
 const num = (s: string) => {
@@ -128,7 +130,6 @@ export default function ScreeningMode({
     refreshToken,
     syncState,
     save,
-    reloadFromCloud,
     dirty,
     saving,
     saveDraftToPersonal,
@@ -152,12 +153,21 @@ export default function ScreeningMode({
     () => new Map()
   );
 
-  const handleSelectSession = useCallback((item: LnpSavedItem) => {
-    if (!selectSession(item)) return;
+  const finishSessionSelection = useCallback(() => {
     setWorkspace(createDefaultWorkspaceValue());
     setFormulationName("");
     setHighlightId(null);
-  }, [selectSession]);
+  }, []);
+
+  const sessionSwitch = useWorkbenchItemSwitch({
+    dirty,
+    currentItemId: activeSession?.id ?? null,
+    select: selectSession,
+    save,
+    onSelected: finishSessionSelection,
+  });
+
+  const handleSelectSession = sessionSwitch.requestSelect;
 
   const handleScopeChange = useCallback((next: DataScope) => {
     if (dirty && !window.confirm("当前修改尚未保存到云端，本机草稿会保留。是否仍要切换数据范围？")) return;
@@ -397,6 +407,7 @@ export default function ScreeningMode({
   );
 
   return (
+    <>
     <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       {/* Sidebar */}
       <aside>
@@ -460,7 +471,7 @@ export default function ScreeningMode({
                     <WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} />
                   </div>
                 </div>
-                <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} onReload={reloadFromCloud} />
+                <WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} />
               </CardContent>
             </Card>
 
@@ -556,6 +567,14 @@ export default function ScreeningMode({
         )}
       </div>
     </div>
+    <WorkbenchSwitchDialog
+      targetName={sessionSwitch.target?.name ?? null}
+      saving={sessionSwitch.savingBeforeSwitch}
+      onCancel={sessionSwitch.cancel}
+      onKeepDraftAndSwitch={sessionSwitch.keepDraftAndSwitch}
+      onSaveAndSwitch={sessionSwitch.saveAndSwitch}
+    />
+    </>
   );
 }
 

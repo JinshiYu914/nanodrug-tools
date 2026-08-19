@@ -34,6 +34,8 @@ import RnaLibraryView from "./rna-library";
 import { useIvtBatch } from "./use-ivt-batch";
 import WorkbenchSyncStatus from "@/components/tools/workbench-sync-status";
 import WorkbenchSaveButton from "@/components/tools/workbench-save-button";
+import WorkbenchSwitchDialog from "@/components/tools/workbench-switch-dialog";
+import { useWorkbenchItemSwitch } from "@/components/tools/use-workbench-item-switch";
 import type { WorkbenchSyncState } from "@/lib/supabase/use-synced-workbench";
 
 type ViewKey = "batch" | "library";
@@ -56,7 +58,6 @@ export default function IvtWorkbench() {
     select,
     clear,
     save,
-    reloadFromCloud,
     dirty,
     saving,
     lastSavedAt,
@@ -103,14 +104,23 @@ export default function IvtWorkbench() {
     [data.rnas, rnaParam]
   );
 
-  const handleSelectBatch = useCallback(
+  const finishBatchSelection = useCallback(
     (item: LnpSavedItem) => {
-      if (!select(item)) return;
       restoreAttempted.current = item.id;
       writeUrl({ view: "batch", batchId: item.id, rnaId: null });
     },
-    [select, writeUrl]
+    [writeUrl]
   );
+
+  const batchSwitch = useWorkbenchItemSwitch({
+    dirty,
+    currentItemId: batch?.id ?? null,
+    select,
+    save,
+    onSelected: finishBatchSelection,
+  });
+
+  const handleSelectBatch = batchSwitch.requestSelect;
 
   function addRna() {
     const seed = data.rnas[data.rnas.length - 1] ?? null;
@@ -183,7 +193,7 @@ export default function IvtWorkbench() {
             <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Dna className="h-4 w-4 text-primary" />新建或选择一个 IVT 批次</CardTitle><CardDescription>一个批次可包含多条 RNA，每条 RNA 可以使用不同方法。</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">使用左侧 <Plus className="inline h-3.5 w-3.5" /> 新建批次，或打开已有批次继续记录。</p></CardContent></Card>
           ) : (
             <div className="space-y-5">
-              <BatchHeader batchName={batch.name} data={data} update={update} save={save} reloadFromCloud={reloadFromCloud} dirty={dirty} saving={saving} lastSavedAt={lastSavedAt} syncState={syncState} />
+              <BatchHeader batchName={batch.name} data={data} update={update} save={save} dirty={dirty} saving={saving} lastSavedAt={lastSavedAt} syncState={syncState} />
               <RnaStrip rnas={data.rnas} activeRnaId={activeRna?.id ?? null} onSelect={(id) => writeUrl({ rnaId: id })} onAdd={addRna} onDelete={removeRna} />
               {activeRna ? (
                 <RnaEditor rna={activeRna} allRnas={data.rnas} onChange={updateRna} onCopyMethod={copyMethod} />
@@ -194,15 +204,22 @@ export default function IvtWorkbench() {
           )}
         </main>
       </div>
+      <WorkbenchSwitchDialog
+        targetName={batchSwitch.target?.name ?? null}
+        saving={batchSwitch.savingBeforeSwitch}
+        onCancel={batchSwitch.cancel}
+        onKeepDraftAndSwitch={batchSwitch.keepDraftAndSwitch}
+        onSaveAndSwitch={batchSwitch.saveAndSwitch}
+      />
     </Shell>
   );
 }
 
-function BatchHeader({ batchName, data, update, save, reloadFromCloud, dirty, saving, lastSavedAt, syncState }: { batchName: string; data: ReturnType<typeof useIvtBatch>["data"]; update: ReturnType<typeof useIvtBatch>["update"]; save: ReturnType<typeof useIvtBatch>["save"]; reloadFromCloud: ReturnType<typeof useIvtBatch>["reloadFromCloud"]; dirty: boolean; saving: boolean; lastSavedAt: Date | null; syncState: WorkbenchSyncState }) {
+function BatchHeader({ batchName, data, update, save, dirty, saving, lastSavedAt, syncState }: { batchName: string; data: ReturnType<typeof useIvtBatch>["data"]; update: ReturnType<typeof useIvtBatch>["update"]; save: ReturnType<typeof useIvtBatch>["save"]; dirty: boolean; saving: boolean; lastSavedAt: Date | null; syncState: WorkbenchSyncState }) {
   const setMeta = (patch: Partial<typeof data.meta>) => update((previous) => ({ ...previous, meta: { ...previous.meta, ...patch } }));
   return (
     <Card><CardContent className="space-y-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{batchName}</h2><div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground"><WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} /><span>{data.rnas.length} 条 RNA</span></div></div><WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} onReload={reloadFromCloud} /></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{batchName}</h2><div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground"><WorkbenchSyncStatus state={syncState} lastSavedAt={lastSavedAt} /><span>{data.rnas.length} 条 RNA</span></div></div><WorkbenchSaveButton dirty={dirty} saving={saving} onSave={save} /></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="批次编号"><Input className="h-8 text-xs" value={data.meta.batchCode} onChange={(event) => setMeta({ batchCode: event.target.value })} placeholder="IVT-0812-A" /></Field><Field label="实验日期"><Input type="date" className="h-8 text-xs" value={data.meta.date} onChange={(event) => setMeta({ date: event.target.value })} /></Field><Field label="负责人"><Input className="h-8 text-xs" value={data.meta.operator} onChange={(event) => setMeta({ operator: event.target.value })} /></Field><Field label="实验目的"><Input className="h-8 text-xs" value={data.meta.objective} onChange={(event) => setMeta({ objective: event.target.value })} /></Field></div>
       <Field label="批次备注"><Textarea rows={2} value={data.meta.note} onChange={(event) => setMeta({ note: event.target.value })} /></Field>
     </CardContent></Card>
