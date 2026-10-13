@@ -172,7 +172,7 @@ export default function IvtWorkbench() {
   if (!authed) {
     return (
       <Shell>
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><LogIn className="h-5 w-5 text-primary" />IVT mRNA 工作台需要登录</CardTitle><CardDescription>登录后可按批次记录 IVT 并维护个人 RNA 库。</CardDescription></CardHeader><CardContent><Link href="/login"><Button className="gap-2"><LogIn className="h-4 w-4" />前往登录</Button></Link></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><LogIn className="h-5 w-5 text-primary" />IVT mRNA 工作台需要登录</CardTitle><CardDescription>登录后可按批次记录 IVT 并维护个人 RNA 库。</CardDescription></CardHeader><CardContent><Button asChild className="gap-2"><Link href="/login"><LogIn className="h-4 w-4" />前往登录</Link></Button></CardContent></Card>
       </Shell>
     );
   }

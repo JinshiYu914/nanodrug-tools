@@ -152,12 +152,12 @@ export default function RibogreenRecordsPanel({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/login">
-            <Button className="gap-2">
+          <Button asChild className="gap-2">
+            <Link href="/login">
               <LogIn className="h-4 w-4" />
               前往登录
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     );

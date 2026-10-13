@@ -64,12 +64,12 @@ export default function ForgotPasswordPage() {
             >
               重新发送
             </Button>
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 返回登录
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -118,12 +118,12 @@ export default function ForgotPasswordPage() {
                 "发送重置链接"
               )}
             </Button>
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 返回登录
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </CardFooter>
         </form>
       </Card>

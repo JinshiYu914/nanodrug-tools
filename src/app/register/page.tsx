@@ -80,9 +80,9 @@ export default function RegisterPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
-            <Link href="/login">
-              <Button variant="outline">返回登录</Button>
-            </Link>
+            <Button asChild variant="outline">
+              <Link href="/login">返回登录</Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
