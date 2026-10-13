@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { UserPlus, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile, type TurnstileHandle } from "@/components/auth/turnstile";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -26,6 +27,8 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +56,7 @@ export default function RegisterPage() {
           data: {
             display_name: displayName,
           },
+          captchaToken: captchaToken ?? undefined,
         },
       });
 
@@ -64,6 +68,7 @@ export default function RegisterPage() {
     } catch {
       setError("注册服务暂时不可用，请稍后重试。");
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -188,9 +193,10 @@ export default function RegisterPage() {
                 <p className="text-xs text-destructive">两次输入的密码不一致</p>
               )}
             </div>
+            <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !captchaToken}>
               {loading ? "注册中..." : "创建账户"}
             </Button>
             <p className="text-sm text-muted-foreground">
