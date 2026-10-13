@@ -1,3 +1,12 @@
+import type { Metadata } from "next";
+
+// Default for every /tools/* page; pages with their own metadata override it.
+export const metadata: Metadata = {
+  title: "Lab Tools",
+  description:
+    "Online calculators for nano drug delivery and molecular biology: molecular weight, molar concentration, dilution, LNP formulation, ligation, RiboGreen, ELISA.",
+};
+
 /**
  * Lab Tools shell.
  *

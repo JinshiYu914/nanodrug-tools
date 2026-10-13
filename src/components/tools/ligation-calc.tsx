@@ -29,7 +29,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentUserId } from "@/lib/supabase/use-user";
-import * as XLSX from "xlsx";
 
 interface Fragment {
   id: string;
@@ -310,8 +309,9 @@ export function LigationCalc() {
   }
 
   // ── Excel export ──
-  function handleExport() {
+  async function handleExport() {
     if (records.length === 0) return;
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
 
     const summaryRows: Record<string, string | number>[] = [];

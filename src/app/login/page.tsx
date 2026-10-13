@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LogIn, Eye, EyeOff } from "lucide-react";
@@ -15,6 +15,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile, type TurnstileHandle } from "@/components/auth/turnstile";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,6 +25,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -34,13 +38,17 @@ export default function LoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: { captchaToken: captchaToken ?? undefined },
       });
 
       if (authError) {
         setError(authError.message);
         return;
       }
-      router.push("/");
+      // Read on submit rather than via useSearchParams, which would need a
+      // Suspense boundary to keep this page statically prerendered.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(safeNextPath(next));
       router.refresh();
     } catch (loginError) {
       const message = loginError instanceof Error ? loginError.message : "";
@@ -50,6 +58,7 @@ export default function LoginPage() {
           : "登录服务暂时不可用，请稍后重试。"
       );
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -75,6 +84,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -95,6 +105,7 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="输入密码"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -106,6 +117,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -115,9 +127,10 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !captchaToken}>
               {loading ? "登录中..." : "登录"}
             </Button>
             <p className="text-sm text-muted-foreground">

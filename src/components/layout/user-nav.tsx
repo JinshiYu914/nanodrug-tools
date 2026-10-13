@@ -25,11 +25,9 @@ export function UserNav() {
 
   if (!user) {
     return (
-      <Link href="/login" className="hidden md:block">
-        <Button variant="outline" size="sm">
-          Sign in
-        </Button>
-      </Link>
+      <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
+        <Link href="/login">Sign in</Link>
+      </Button>
     );
   }
 

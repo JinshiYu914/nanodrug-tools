@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { KeyRound, ArrowLeft, Mail, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,29 +15,39 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile, type TurnstileHandle } from "@/components/auth/turnstile";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        captchaToken: captchaToken ?? undefined,
+      });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setSent(true);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSent(true);
+      }
+    } catch {
+      setError("服务暂时不可用，请稍后重试。");
+    } finally {
+      captchaRef.current?.reset();
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   if (sent) {
@@ -64,12 +74,12 @@ export default function ForgotPasswordPage() {
             >
               重新发送
             </Button>
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 返回登录
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -106,9 +116,10 @@ export default function ForgotPasswordPage() {
                 required
               />
             </div>
+            <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !captchaToken}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -118,12 +129,12 @@ export default function ForgotPasswordPage() {
                 "发送重置链接"
               )}
             </Button>
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 返回登录
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </CardFooter>
         </form>
       </Card>

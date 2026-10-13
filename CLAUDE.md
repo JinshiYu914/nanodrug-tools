@@ -31,7 +31,7 @@ The auth model relies on `@supabase/ssr` and **all three** clients must stay in 
 
 - [src/lib/supabase/client.ts](src/lib/supabase/client.ts) — browser client for Client Components.
 - [src/lib/supabase/server.ts](src/lib/supabase/server.ts) — server client for Server Components / Route Handlers (uses `next/headers` cookies).
-- [src/lib/supabase/middleware.ts](src/lib/supabase/middleware.ts) — invoked from [src/middleware.ts](src/middleware.ts) on every non-static request. It calls `supabase.auth.getUser()` to refresh cookies **and** enforces gating: unauthenticated requests to `/plasmid/*`, `/dashboard/*`, or `/profile/*` are redirected to `/login`. Add new protected route prefixes here.
+- [src/lib/supabase/middleware.ts](src/lib/supabase/middleware.ts) — invoked from the Next 16 Proxy in [src/proxy.ts](src/proxy.ts), whose matcher is only `/profile/:path*`. It calls `supabase.auth.getClaims()` to refresh cookies **and** redirects unauthenticated requests to `/login?next=…`. Public tools rely on RLS instead. To protect a new prefix, add it to both the matcher and the prefix list here. Any `?next=` destination must go through `safeNextPath` ([src/lib/safe-redirect.ts](src/lib/safe-redirect.ts)).
 
 ### Tools live in two layers
 

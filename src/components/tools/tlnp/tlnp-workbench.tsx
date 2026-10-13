@@ -324,7 +324,7 @@ export default function TlnpWorkbench() {
           {guest ? (
             <Card className="lg:sticky lg:top-20">
               <CardHeader><CardTitle className="text-sm">体验示例</CardTitle><CardDescription>登录后才能新建、保存和跨设备同步自己的实验。</CardDescription></CardHeader>
-              <CardContent className="space-y-2"><Link href="/login"><Button className="w-full gap-2"><LogIn className="h-4 w-4" />登录后新建实验</Button></Link><p className="text-center text-[11px] text-muted-foreground">刷新页面不会保存本次修改</p></CardContent>
+              <CardContent className="space-y-2"><Button asChild className="w-full gap-2"><Link href="/login"><LogIn className="h-4 w-4" />登录后新建实验</Link></Button><p className="text-center text-[11px] text-muted-foreground">刷新页面不会保存本次修改</p></CardContent>
             </Card>
           ) : (
             <BatchSidebar
@@ -422,7 +422,7 @@ export default function TlnpWorkbench() {
                   data={data}
                 />
               ) : guest ? (
-                <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><LogIn className="h-4 w-4 text-primary" />跨批次对比需要登录</CardTitle><CardDescription>示例模式只有一个临时批次，不会读取任何用户云端记录。</CardDescription></CardHeader><CardContent><Link href="/login"><Button>前往登录</Button></Link></CardContent></Card>
+                <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><LogIn className="h-4 w-4 text-primary" />跨批次对比需要登录</CardTitle><CardDescription>示例模式只有一个临时批次，不会读取任何用户云端记录。</CardDescription></CardHeader><CardContent><Button asChild><Link href="/login">前往登录</Link></Button></CardContent></Card>
               ) : (
                 <BatchCompare activeBatchId={batch.id} scope={scope} />
               )}
@@ -522,7 +522,7 @@ function BatchHeader({
               label="总览与导出"
             />
             {demo ? (
-              <Link href="/login"><Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"><LogIn className="h-3.5 w-3.5" />登录后新建实验</Button></Link>
+              <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-xs"><Link href="/login"><LogIn className="h-3.5 w-3.5" />登录后新建实验</Link></Button>
             ) : (
               <HeaderTab
                 active={activeModule === "compare"}

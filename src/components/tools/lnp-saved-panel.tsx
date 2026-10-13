@@ -38,7 +38,7 @@ import {
   type TreeNode,
 } from "@/lib/supabase/lnp-service";
 import { getCurrentUserId } from "@/lib/supabase/use-user";
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
 import { PERSONAL_SCOPE, canEditScope, type DataScope } from "@/lib/projects/types";
 import CopyScopeAction from "@/components/projects/copy-scope-action";
 import DataScopePicker from "@/components/projects/data-scope-picker";
@@ -357,16 +357,17 @@ export default function LnpSavedPanel({
     setDropPos(null);
   }
 
-  function handleExport() {
+  async function handleExport() {
     const nonFolder = items.filter((i) => !i.is_folder);
     if (nonFolder.length === 0) return;
 
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
 
     if (type === "formula") {
-      exportFormulaSheets(wb, nonFolder);
+      exportFormulaSheets(XLSX, wb, nonFolder);
     } else {
-      exportPreparationSheets(wb, nonFolder);
+      exportPreparationSheets(XLSX, wb, nonFolder);
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -777,8 +778,11 @@ interface FormulaLipidEntry {
   stockConc?: string;
 }
 
+type XlsxModule = typeof import("xlsx");
+
 function exportFormulaSheets(
-  wb: XLSX.WorkBook,
+  XLSX: XlsxModule,
+  wb: WorkBook,
   items: LnpSavedItem[]
 ) {
   // Summary sheet
@@ -858,7 +862,8 @@ function exportFormulaSheets(
 }
 
 function exportPreparationSheets(
-  wb: XLSX.WorkBook,
+  XLSX: XlsxModule,
+  wb: WorkBook,
   items: LnpSavedItem[]
 ) {
   const rows: Record<string, string | number>[] = [];

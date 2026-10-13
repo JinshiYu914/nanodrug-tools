@@ -12,7 +12,6 @@ import {
   flattenRnaLibrary,
   type RnaLibraryEntry,
 } from "@/lib/calculations/ivt-experiment";
-import { exportRnaLibraryXlsx } from "@/lib/export/ivt-rna-library-xlsx";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
 
 export default function RnaLibraryView({ refreshToken }: { refreshToken?: number }) {
@@ -55,7 +54,7 @@ export default function RnaLibraryView({ refreshToken }: { refreshToken?: number
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><CardTitle className="flex items-center gap-2 text-base"><Library className="h-4 w-4 text-primary" />我的 RNA 库</CardTitle><p className="mt-1 text-xs text-muted-foreground">自动汇总全部 IVT 批次，共 {entries.length} 条 RNA。</p></div>
-          <Button size="sm" variant="outline" className="gap-1.5" disabled={entries.length === 0} onClick={() => { exportRnaLibraryXlsx(entries); toast.success("RNA 库 Excel 已生成"); }}><Download className="h-3.5 w-3.5" />导出所有 RNA</Button>
+          <Button size="sm" variant="outline" className="gap-1.5" disabled={entries.length === 0} onClick={async () => { try { const { exportRnaLibraryXlsx } = await import("@/lib/export/ivt-rna-library-xlsx"); exportRnaLibraryXlsx(entries); toast.success("RNA 库 Excel 已生成"); } catch (e) { console.error(e); toast.error("导出 Excel 失败"); } }}><Download className="h-3.5 w-3.5" />导出所有 RNA</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

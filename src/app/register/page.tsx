@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { UserPlus, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile, type TurnstileHandle } from "@/components/auth/turnstile";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -26,6 +27,8 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -44,22 +47,28 @@ export default function RegisterPage() {
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: displayName,
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+          },
+          captchaToken: captchaToken ?? undefined,
         },
-      },
-    });
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      setSuccess(true);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError("注册服务暂时不可用，请稍后重试。");
+    } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -76,9 +85,9 @@ export default function RegisterPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
-            <Link href="/login">
-              <Button variant="outline">返回登录</Button>
-            </Link>
+            <Button asChild variant="outline">
+              <Link href="/login">返回登录</Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -143,6 +152,7 @@ export default function RegisterPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -170,6 +180,7 @@ export default function RegisterPage() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showConfirmPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -182,9 +193,10 @@ export default function RegisterPage() {
                 <p className="text-xs text-destructive">两次输入的密码不一致</p>
               )}
             </div>
+            <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !captchaToken}>
               {loading ? "注册中..." : "创建账户"}
             </Button>
             <p className="text-sm text-muted-foreground">

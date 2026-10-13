@@ -37,7 +37,6 @@ import {
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 import { groupRoi, liverSpleenRatio } from "@/lib/calculations/tlnp-roi";
-import { exportTlnpToXlsx } from "@/lib/export/tlnp-report-xlsx";
 
 const n = (v: number | null, digits = 1): string =>
   v === null || !isFinite(v) ? "--" : v.toFixed(digits);
@@ -74,8 +73,9 @@ export default function BatchReport({
     }
   }
 
-  function exportXlsx() {
+  async function exportXlsx() {
     try {
+      const { exportTlnpToXlsx } = await import("@/lib/export/tlnp-report-xlsx");
       exportTlnpToXlsx(batchName, createdAt, updatedAt, data);
       toast.success("Excel 已生成");
     } catch (e) {
