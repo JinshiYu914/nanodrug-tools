@@ -88,7 +88,6 @@ import {
   listAllItems,
   type LnpSavedItem,
 } from "@/lib/supabase/lnp-service";
-import { exportBenchToXlsx } from "@/lib/export/lnp-bench-xlsx";
 
 export interface ScreeningFocus {
   sessionId: string;
@@ -336,9 +335,10 @@ export default function ScreeningMode({
     }
   }
 
-  function handleExportXlsx(formulations: BenchFormulation[]) {
+  async function handleExportXlsx(formulations: BenchFormulation[]) {
     if (!activeSession || formulations.length === 0) return;
     try {
+      const { exportBenchToXlsx } = await import("@/lib/export/lnp-bench-xlsx");
       exportBenchToXlsx(
         activeSession.name,
         activeSession.created_at,

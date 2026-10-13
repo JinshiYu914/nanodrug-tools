@@ -10,7 +10,6 @@ import {
 } from "@/lib/calculations/lnp-bench";
 import { formatVolume } from "@/lib/calculations/lnp-formula";
 import type { TlnpPrepSample } from "@/lib/calculations/tlnp-experiment";
-import { exportBenchToXlsx } from "@/lib/export/lnp-bench-xlsx";
 import type { LipidEntry } from "@/lib/calculations/lnp-formula";
 
 const num = (s: string) => {
@@ -81,9 +80,10 @@ export default function FormulationOutput({
     }
   }
 
-  function exportXlsx() {
+  async function exportXlsx() {
     if (samples.length === 0) return;
     try {
+      const { exportBenchToXlsx } = await import("@/lib/export/lnp-bench-xlsx");
       exportBenchToXlsx(batchName, createdAt, updatedAt, samples);
       toast.success("Excel 已生成");
     } catch (e) {

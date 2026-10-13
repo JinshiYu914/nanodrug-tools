@@ -44,22 +44,26 @@ export default function RegisterPage() {
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: displayName,
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      setSuccess(true);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError("注册服务暂时不可用，请稍后重试。");
+    } finally {
       setLoading(false);
     }
   }
@@ -143,6 +147,7 @@ export default function RegisterPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -170,6 +175,7 @@ export default function RegisterPage() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showConfirmPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />

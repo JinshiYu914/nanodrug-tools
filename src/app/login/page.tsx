@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +41,10 @@ export default function LoginPage() {
         setError(authError.message);
         return;
       }
-      router.push("/");
+      // Read on submit rather than via useSearchParams, which would need a
+      // Suspense boundary to keep this page statically prerendered.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(safeNextPath(next));
       router.refresh();
     } catch (loginError) {
       const message = loginError instanceof Error ? loginError.message : "";
@@ -106,6 +110,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />

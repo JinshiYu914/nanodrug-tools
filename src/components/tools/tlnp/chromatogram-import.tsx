@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { AlertTriangle, ClipboardPaste, Upload, X } from "lucide-react";
-import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +76,7 @@ export default function ChromatogramImport({
 
   async function importFile(file: File) {
     try {
+      const XLSX = await import("xlsx");
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("文件中没有工作表");

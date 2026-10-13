@@ -19,7 +19,6 @@ import {
   type TlnpExperimentData,
 } from "@/lib/calculations/tlnp-experiment";
 import { listAllItems, type LnpSavedItem } from "@/lib/supabase/lnp-service";
-import { exportCompareToXlsx } from "@/lib/export/tlnp-report-xlsx";
 import { describeError } from "@/components/tools/ribogreen/use-ribogreen-saved";
 import { PERSONAL_SCOPE, type DataScope } from "@/lib/projects/types";
 
@@ -197,8 +196,11 @@ export default function BatchCompare({ activeBatchId, scope = PERSONAL_SCOPE }: 
                 size="sm"
                 variant="outline"
                 className="gap-1.5"
-                onClick={() => {
+                onClick={async () => {
                   try {
+                    const { exportCompareToXlsx } = await import(
+                      "@/lib/export/tlnp-report-xlsx"
+                    );
                     exportCompareToXlsx(
                       selected.map((r) => ({ name: r.item.name, data: r.data }))
                     );

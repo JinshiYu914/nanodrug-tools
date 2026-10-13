@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "@/components/ui/sonner";
+import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,12 +26,17 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "LNP Partner — Lipid nanoparticle & mRNA delivery research",
     template: "%s · LNP Partner",
   },
   description:
     "Research on antibody-targeted lipid nanoparticle delivery, mRNA UTR engineering, and the disease programmes they enable — plus open calculators for the bench.",
+  openGraph: {
+    type: "website",
+    siteName: "LNP Partner",
+  },
 };
 
 export default function RootLayout({
